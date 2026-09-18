@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCompanyRequest;
 use App\Models\Company;
+use App\Support\IspoChecklist;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -39,10 +40,7 @@ class CompanyController extends Controller
                 'auditor_name' => 'Arif Rahman',
                 'due_date' => $request->date('due_date'),
             ]);
-
-            foreach (self::defaultChecklist() as $position => $item) {
-                $audit->items()->create($item + ['sort_order' => $position]);
-            }
+            $audit->items()->createMany(self::checklistItems());
 
             return $company;
         });
@@ -88,13 +86,20 @@ class CompanyController extends Controller
         return redirect()->route('companies.index')->with('success', 'Perusahaan dihapus.');
     }
 
-    private static function defaultChecklist(): array
+    /**
+     * Canonical ISPO checklist items (same 7 principles for every company),
+     * ready to be inserted into a new audit.
+     *
+     * @return array<int, array{title: string, description: ?string, sort_order: int, status: string}>
+     */
+    private static function checklistItems(): array
     {
-        return [
-            ['title' => 'Legalitas dan dokumen perusahaan', 'description' => 'Pastikan dokumen legalitas masih berlaku dan sesuai.'],
-            ['title' => 'Struktur organisasi dan tanggung jawab', 'description' => 'Verifikasi pembagian peran dan otorisasi kerja.'],
-            ['title' => 'Prosedur operasional standar', 'description' => 'Periksa ketersediaan SOP dan bukti penerapannya.'],
-            ['title' => 'Keselamatan dan kesehatan kerja', 'description' => 'Periksa kelengkapan prosedur K3 dan pelatihan.'],
-        ];
+        $items = [];
+
+        foreach (IspoChecklist::items() as $position => $item) {
+            $items[] = $item + ['sort_order' => $position, 'status' => 'pending'];
+        }
+
+        return $items;
     }
 }

@@ -10,20 +10,57 @@ class AuditWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_a_company_creation_creates_an_audit_checklist(): void
+    public function test_a_company_creation_copies_the_iso_checklist_into_the_new_audit(): void
     {
+        $reference = Company::factory()->create()->audits()->create(['title' => 'Checklist acuan']);
+        $reference->items()->createMany([
+            ['title' => '1.1.1 Izin lokasi dan KKPR', 'description' => 'Periksa dokumen izin.', 'sort_order' => 0],
+            ['title' => '2.1.1 Rencana strategis perkebunan', 'sort_order' => 1],
+            ['title' => '3.1.1 Izin lingkungan', 'sort_order' => 2],
+        ]);
+
         $response = $this->post(route('companies.store'), [
             'name' => 'PT Test Verifikasi',
             'industry' => 'Manufaktur',
             'due_date' => '2026-10-01',
         ]);
 
-        $company = Company::query()->firstOrFail();
-        $this->assertDatabaseHas('audits', ['company_id' => $company->id, 'status' => 'pending']);
-        $this->assertDatabaseCount('audit_items', 4);
+        $company = Company::where('name', 'PT Test Verifikasi')->firstOrFail();
         $audit = $company->audits()->firstOrFail();
+
         $response->assertRedirect(route('audits.show', $audit));
-        $this->get(route('audits.show', $audit))->assertOk()->assertSee('Prinsip verifikasi');
+        $this->assertDatabaseHas('audits', ['company_id' => $company->id, 'status' => 'pending']);
+        $this->assertSame(
+            ['1.1.1 Izin lokasi dan KKPR', '2.1.1 Rencana strategis perkebunan', '3.1.1 Izin lingkungan'],
+            $audit->items()->orderBy('sort_order')->pluck('title')->all(),
+        );
+        $this->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertSee('Prinsip verifikasi')
+            ->assertSee('Prinsip 2');
+    }
+
+    public function test_sync_command_unifies_legacy_audits_with_the_reference_checklist(): void
+    {
+        $reference = Company::factory()->create()->audits()->create(['title' => 'Checklist acuan']);
+        $reference->items()->createMany([
+            ['title' => '1.1.1 Izin lokasi dan KKPR', 'sort_order' => 0],
+            ['title' => '2.1.1 Rencana strategis perkebunan', 'sort_order' => 1],
+            ['title' => '3.1.1 Izin lingkungan', 'sort_order' => 2],
+        ]);
+
+        $legacyCompany = Company::factory()->create();
+        $legacy = $legacyCompany->audits()->create(['title' => 'Audit lama', 'status' => 'completed']);
+        $legacy->items()->create(['title' => 'Legalitas perusahaan', 'sort_order' => 0]);
+
+        $this->artisan('audit:sync-checklist')->assertSuccessful();
+
+        $this->assertSame('in_progress', $legacy->fresh()->status);
+        $this->assertSame(
+            ['1.1.1 Izin lokasi dan KKPR', '2.1.1 Rencana strategis perkebunan', '3.1.1 Izin lingkungan'],
+            $legacy->items()->orderBy('sort_order')->pluck('title')->all(),
+        );
+        $this->assertSame(3, $reference->items()->count());
     }
 
     public function test_audit_cannot_be_completed_until_every_item_is_filled(): void
