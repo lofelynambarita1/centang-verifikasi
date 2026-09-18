@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateAuditItemRequest;
 use App\Models\Audit;
+use App\Models\AuditHasil;
 use App\Models\AuditItem;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 
@@ -16,7 +20,7 @@ class AuditController extends Controller
     public function show(Audit $audit): View
     {
         $audit->load(['company', 'findings']);
-        $allItems = $audit->items()->get();
+        $allItems = $audit->items()->with('hasils')->get();
         $isIspoChecklist = $allItems->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
 
         if ($isIspoChecklist) {
@@ -60,6 +64,66 @@ class AuditController extends Controller
         return back()->with('success', 'Bukti pendukung berhasil diunggah.');
     }
 
+    public function storeHasil(Request $request, AuditItem $auditItem): RedirectResponse
+    {
+        $validated = $this->validateHasil($request);
+
+        $auditItem->hasils()->create([
+            'content' => $validated['content'] ?? null,
+            'evidence_path' => $request->hasFile('evidence')
+                ? $request->file('evidence')->store('audit-evidence', 'public')
+                : null,
+            'sort_order' => ((int) $auditItem->hasils()->max('sort_order')) + 1,
+        ]);
+        $auditItem->audit()->update(['status' => 'in_progress']);
+
+        return back()->with('success', 'Hasil audit ditambahkan dan tersimpan sebagai draft.');
+    }
+
+    public function updateHasil(Request $request, AuditHasil $auditHasil): RedirectResponse
+    {
+        $validated = $this->validateHasil($request);
+
+        $auditHasil->update(['content' => $validated['content'] ?? null]);
+
+        if ($request->hasFile('evidence')) {
+            if ($auditHasil->evidence_path) {
+                Storage::disk('public')->delete($auditHasil->evidence_path);
+            }
+
+            $auditHasil->update(['evidence_path' => $request->file('evidence')->store('audit-evidence', 'public')]);
+        }
+
+        $auditHasil->auditItem->audit()->update(['status' => 'in_progress']);
+
+        return back()->with('success', 'Hasil audit tersimpan sebagai draft.');
+    }
+
+    public function destroyHasil(AuditHasil $auditHasil): RedirectResponse
+    {
+        $audit = $auditHasil->auditItem->audit;
+
+        if ($auditHasil->evidence_path) {
+            Storage::disk('public')->delete($auditHasil->evidence_path);
+        }
+
+        $auditHasil->delete();
+        $audit->update(['status' => 'in_progress']);
+
+        return back()->with('success', 'Hasil audit dihapus.');
+    }
+
+    /**
+     * @return array{content?: ?string, evidence?: mixed}
+     */
+    private function validateHasil(Request $request): array
+    {
+        return $request->validate([
+            'content' => ['nullable', 'string', 'max:5000', 'required_without:evidence'],
+            'evidence' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240', 'required_without:content'],
+        ]);
+    }
+
     public function complete(Audit $audit): RedirectResponse
     {
         $audit->load('items');
@@ -72,43 +136,184 @@ class AuditController extends Controller
 
     public function report(Audit $audit): View
     {
-        return view('audits.report', ['audit' => $audit->load(['company', 'items', 'findings'])]);
+        return view('audits.report', ['audit' => $audit->load(['company', 'items.hasils', 'findings'])]);
+    }
+
+    public function pdf(Audit $audit): mixed
+    {
+        $audit->load(['company', 'items.hasils', 'findings']);
+        $items = $audit->items;
+        $isIspoChecklist = $items->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
+        $principles = $isIspoChecklist
+            ? collect(range(1, 7))->mapWithKeys(fn (int $number): array => [
+                $number => $items->filter(fn (AuditItem $item): bool => (int) $item->title === $number)->values(),
+            ])
+            : collect();
+
+        $pdf = Pdf::loadView('audits.pdf', [
+            'audit' => $audit,
+            'items' => $items,
+            'isIspoChecklist' => $isIspoChecklist,
+            'principles' => $principles,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download('laporan-verifikasi-ispo-'.Str::slug($audit->company->name).'.pdf');
     }
 
     public function download(Audit $audit): mixed
     {
-        $audit->load(['company', 'items']);
+        $audit->load(['company', 'items.hasils']);
+        $items = $audit->items;
+        $isIspoChecklist = $items->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
+        $compliant = $items->where('status', 'compliant')->count();
+        $nonCompliant = $items->where('status', 'non_compliant')->count();
+        $notApplicable = $items->where('status', 'not_applicable')->count();
+        $verified = $compliant + $nonCompliant + $notApplicable;
+        $totalItems = $items->count();
+        $statusLabels = [
+            'compliant' => 'Memenuhi',
+            'non_compliant' => 'Tidak Memenuhi',
+            'not_applicable' => 'NA',
+            'pending' => 'Belum diperiksa',
+        ];
+        $principleTitles = [
+            1 => 'KEPATUHAN TERHADAP PERATURAN PERUNDANG-UNDANGAN',
+            2 => 'PENERAPAN PRAKTEK PERKEBUNAN YANG BAIK',
+            3 => 'PENGELOLAAN LINGKUNGAN HIDUP, SUMBER DAYA ALAM, DAN KEANEKARAGAMAN HAYATI',
+            4 => 'TANGGUNG JAWAB KETENAGAKERJAAN',
+            5 => 'TANGGUNG JAWAB SOSIAL DAN PEMBERDAYAAN EKONOMI MASYARAKAT',
+            6 => 'PENERAPAN TRANSPARANSI',
+            7 => 'PENINGKATAN USAHA SECARA BERKELANJUTAN',
+        ];
+
         $document = new PhpWord;
         $document->setDefaultFontName('Arial');
         $document->setDefaultFontSize(10);
-        $section = $document->addSection(['marginTop' => 900, 'marginBottom' => 900]);
-        $section->addText('VERIFIKASI AUDIT ISPO', ['bold' => true, 'size' => 16, 'color' => '08755F']);
-        $section->addText('Laporan Audit Verifikasi', ['bold' => true, 'size' => 14]);
-        $section->addText($audit->company->name.' - '.$audit->title);
+        $section = $document->addSection(['marginTop' => 900, 'marginBottom' => 900, 'marginLeft' => 1100, 'marginRight' => 1100]);
+
+        $section->addText('PT. GLOBAL INSPEKSI SERTIFIKASI', ['bold' => true, 'size' => 17, 'color' => '08755F']);
+        $section->addText('Inspection & Certification Body', ['italic' => true, 'size' => 10, 'color' => '666666']);
         $section->addTextBreak(1);
-        $section->addText('Perusahaan: '.$audit->company->name);
-        $section->addText('Auditor: '.($audit->auditor_name ?: '-'));
-        $section->addText('Deadline: '.($audit->due_date?->format('d F Y') ?: '-'));
+        $section->addText('LAPORAN VERIFIKASI HASIL ISPO', ['bold' => true, 'size' => 14], ['alignment' => 'center']);
+        $section->addText('('.strtoupper($audit->company->name ?: 'AUDITEE / NAMA KLIEN').')', ['size' => 12], ['alignment' => 'center']);
         $section->addTextBreak(1);
-        $table = $section->addTable(['borderSize' => 6, 'borderColor' => 'D9E5DF', 'cellMargin' => 80]);
-        $table->addRow();
-        foreach (['No.', 'Prinsip verifikasi', 'Hasil', 'Catatan'] as $heading) {
-            $table->addCell(1800, ['bgColor' => 'E8F5EF'])->addText($heading, ['bold' => true]);
+
+        $facts = [
+            'Nama Perusahaan' => $audit->company->name ?: '-',
+            'Alamat Perusahaan' => $audit->company->address ?: '-',
+            'Bidang Usaha' => $audit->company->industry ?: '-',
+            'Auditor' => $audit->auditor_name ?: '-',
+            'Tanggal Audit' => $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-',
+        ];
+        $factTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 70]);
+        foreach ($facts as $label => $value) {
+            $row = $factTable->addRow();
+            $row->addCell(3300)->addText($label, ['bold' => true]);
+            $row->addCell(500)->addText(':');
+            $row->addCell(6300)->addText($value);
         }
-        foreach ($audit->items as $index => $item) {
+        $section->addTextBreak(1);
+
+        $section->addText('I. HASIL PENILAIAN', ['bold' => true, 'size' => 12, 'color' => '08755F']);
+        $section->addText('Ringkasan Penilaian', ['bold' => true, 'size' => 10]);
+        $section->addText('Dalam kegiatan penilaian atau audit ISPO tahap 2 ini ditemukan beberapa ketidaksesuaian yang terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan pihak '.($audit->company->name ?: 'perusahaan').' telah melakukan tindakan perbaikan untuk pemenuhan ketidaksesuaian tersebut.');
+        $section->addText('Berikut merupakan ringkasan hasil penilaian berdasarkan prinsip, kriteria, dan indikator ISPO yang berlaku.');
+
+        $summaryTable = $section->addTable(['borderSize' => 6, 'borderColor' => 'D9E5DF', 'cellMargin' => 70]);
+        $summaryTable->addRow();
+        foreach (['Total indikator', 'Memenuhi', 'Tidak memenuhi', 'NA', 'Terisi'] as $heading) {
+            $summaryTable->addCell(2000, ['bgColor' => 'E8F5EF'])->addText($heading, ['bold' => true]);
+        }
+        $summaryTable->addRow();
+        foreach ([$totalItems, $compliant, $nonCompliant, $notApplicable, $verified.' / '.$totalItems] as $value) {
+            $summaryTable->addCell(2000)->addText((string) $value);
+        }
+        $section->addTextBreak(1);
+
+        $section->addText('II. HASIL VERIFIKASI PENILAIAN', ['bold' => true, 'size' => 12, 'color' => '08755F']);
+
+        $groups = $isIspoChecklist
+            ? collect(range(1, 7))->mapWithKeys(fn (int $number): array => [
+                $number => $items->filter(fn (AuditItem $item): bool => (int) $item->title === $number)->values(),
+            ])
+            : collect([0 => $items->values()]);
+
+        foreach ($groups as $number => $group) {
+            if ($group->isEmpty()) {
+                continue;
+            }
+
+            if ($isIspoChecklist) {
+                $section->addText('PRINSIP '.$number.' — '.($principleTitles[$number] ?? ''), ['bold' => true, 'size' => 11, 'color' => '123C32']);
+            }
+
+            $table = $section->addTable(['borderSize' => 6, 'borderColor' => 'D9E5DF', 'cellMargin' => 60]);
             $table->addRow();
-            $table->addCell(700)->addText((string) ($index + 1));
-            $table->addCell(5000)->addText($item->title."\n".($item->description ?: ''));
-            $table->addCell(2200)->addText(match ($item->status) {
-                'compliant' => 'Sesuai',
-                'non_compliant' => 'Perlu perbaikan',
-                'not_applicable' => 'Tidak berlaku',
-                default => 'Belum diperiksa',
-            });
-            $table->addCell(4000)->addText($item->note ?: '-');
+            foreach (['No', 'Indikator', 'Parameter', 'Hasil Audit', 'Status'] as $heading) {
+                $table->addCell($heading === 'No' ? 600 : 2000, ['bgColor' => 'E8F5EF'])->addText($heading, ['bold' => true]);
+            }
+
+            $position = 0;
+            foreach ($group as $item) {
+                $position++;
+                preg_match('/^(\d+\.\d+\.\d+)\s*(.*)$/s', $item->title, $parts);
+
+                $table->addRow();
+                $table->addCell(600)->addText((string) $position);
+                $table->addCell(4600)->addText(($parts[1] ?? $position).' '.($parts[2] ?? $item->title));
+                $table->addCell(2600)->addText($item->description ?: '-');
+
+                $hasilCell = $table->addCell(2000);
+                if ($item->hasils->isEmpty()) {
+                    $hasilCell->addText($item->note ?: '-');
+                } else {
+                    foreach ($item->hasils as $hasil) {
+                        $hasilCell->addText($hasil->content ?: '(tanpa keterangan)');
+                        if ($hasil->evidence_path) {
+                            $hasilCell->addText('Bukti: '.basename($hasil->evidence_path), ['size' => 8, 'color' => '555555']);
+                        }
+                    }
+                }
+
+                $table->addCell(1400)->addText($statusLabels[$item->status] ?? 'Belum diperiksa');
+            }
+
+            if ($isIspoChecklist) {
+                $section->addText('Prinsip '.$number.': Memenuhi '.$group->where('status', 'compliant')->count().' · Tidak memenuhi '.$group->where('status', 'non_compliant')->count().' · NA '.$group->where('status', 'not_applicable')->count(), ['size' => 9, 'color' => '555555']);
+                $section->addTextBreak(1);
+            }
         }
-        $section->addTextBreak(1);
-        $section->addText('Status audit: '.($audit->status === 'completed' ? 'Selesai' : 'Belum selesai'), ['bold' => true]);
+
+        if ($nonCompliant > 0) {
+            $section->addText('III. TEMUAN AUDIT', ['bold' => true, 'size' => 12, 'color' => '08755F']);
+            foreach ($items->where('status', 'non_compliant') as $item) {
+                $section->addText('• '.$item->title.' — '.($item->note ?: 'Belum ada catatan tindak lanjut.'));
+            }
+            $section->addTextBreak(1);
+        }
+
+        $section->addTextBreak(2);
+        $signatures = $section->addTable(['borderSize' => 0, 'cellMargin' => 70]);
+        $signatures->addRow();
+        $left = $signatures->addCell(5000);
+        $right = $signatures->addCell(5000);
+
+        foreach ([$left, $right] as $cell) {
+            $cell->addText('');
+            $cell->addText('');
+            $cell->addText('');
+            $cell->addText('');
+            $cell->addText('(ttd)', ['bold' => true], ['alignment' => 'center']);
+            $cell->addText('');
+        }
+        $left->addText($audit->auditor_name ?: '(Nama Auditor)', [], ['alignment' => 'center']);
+        $left->addText('Auditor', ['size' => 9, 'color' => '555555'], ['alignment' => 'center']);
+        $right->addText('(Nama Pimpinan Perusahaan)', [], ['alignment' => 'center']);
+        $right->addText($audit->company->name ?: 'Pimpinan Perusahaan', ['size' => 9, 'color' => '555555'], ['alignment' => 'center']);
+
+        $section->addTextBreak(2);
+        $section->addText('Status audit: '.($audit->status === 'completed' ? 'Selesai' : 'Belum selesai').'  ·  Dokumen dihasilkan otomatis dari sistem verifikasi audit ISPO pada '.now()->locale('id')->translatedFormat('d F Y H:i').'.', ['size' => 8, 'color' => '888888']);
+
         $filePath = tempnam(sys_get_temp_dir(), 'audit-').'.docx';
         IOFactory::createWriter($document, 'Word2007')->save($filePath);
 

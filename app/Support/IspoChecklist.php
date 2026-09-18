@@ -3,52 +3,71 @@
 namespace App\Support;
 
 use App\Models\Audit;
-use App\Models\AuditItem;
 
 class IspoChecklist
 {
     /**
-     * Resolve the fullest ISPO checklist already stored in the app (the
-     * reference audit), so every audit shares the same 7 principles.
+     * Nama prinsip ISPO beserta nomornya.
+     *
+     * @return array<int, string>
      */
-    public static function referenceAudit(): ?Audit
+    public static function principles(): array
     {
-        return Audit::query()
-            ->with('items')
-            ->get()
-            ->filter(fn (Audit $audit): bool => $audit->items->contains(
-                fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1
-            ))
-            ->sortByDesc(fn (Audit $audit): array => [$audit->items->count(), $audit->updated_at?->timestamp ?? 0])
-            ->first();
+        return config('ispo.principles', []);
     }
 
     /**
-     * The canonical ISPO indicator items (title + description only).
+     * Judul dan deskripsi setiap kriteria ISPO (mis. 1.1, 3.12).
+     *
+     * @return array<string, array{title: string, description: string}>
+     */
+    public static function criteria(): array
+    {
+        return config('ispo.criteria', []);
+    }
+
+    /**
+     * Indikator ISPO lengkap dengan prinsip, kriteria, dan daftar parameternya.
+     *
+     * @return array<int, array{code: string, principle: int, criteria: string, title: string, parameters: array<int, string>}>
+     */
+    public static function indicators(): array
+    {
+        return config('ispo.indicators', []);
+    }
+
+    /**
+     * Kode kriteria (mis. "1.1") dari judul indikator (mis. "1.1.1 ...").
+     */
+    public static function criteriaCode(?string $title): ?string
+    {
+        if ($title !== null && preg_match('/^(\d+\.\d+)\.\d+/', $title, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Checklist ISPO siap disimpan sebagai item audit.
      *
      * @return array<int, array{title: string, description: ?string}>
      */
     public static function items(): array
     {
-        $reference = static::referenceAudit();
+        return array_map(function (array $indicator): array {
+            $description = implode("\n", $indicator['parameters']);
 
-        if ($reference === null) {
-            return static::fallbackItems();
-        }
-
-        return $reference->items
-            ->sortBy('sort_order')
-            ->map(fn (AuditItem $item): array => [
-                'title' => $item->title,
-                'description' => $item->description,
-            ])
-            ->values()
-            ->all();
+            return [
+                'title' => $indicator['code'].' '.$indicator['title'],
+                'description' => $description !== '' ? $description : null,
+            ];
+        }, static::indicators());
     }
 
     /**
-     * Replace an audit's items with the canonical ISPO checklist and reset it
-     * to an in-progress state so the auditor only needs to fill in statuses.
+     * Ganti seluruh item audit dengan checklist ISPO acuan dan atur ulang
+     * statusnya supaya auditor cukup mengisi hasil verifikasi.
      */
     public static function replaceItems(Audit $audit): void
     {
@@ -64,20 +83,5 @@ class IspoChecklist
             ->values()
             ->all());
         $audit->update(['status' => 'in_progress']);
-    }
-
-    /**
-     * Generic fallback used only when no ISPO checklist has been imported yet.
-     *
-     * @return array<int, array{title: string, description: ?string}>
-     */
-    private static function fallbackItems(): array
-    {
-        return [
-            ['title' => 'Legalitas dan dokumen perusahaan', 'description' => 'Pastikan dokumen legalitas masih berlaku dan sesuai.'],
-            ['title' => 'Struktur organisasi dan tanggung jawab', 'description' => 'Verifikasi pembagian peran dan otorisasi kerja.'],
-            ['title' => 'Prosedur operasional standar', 'description' => 'Periksa ketersediaan SOP dan bukti penerapannya.'],
-            ['title' => 'Keselamatan dan kesehatan kerja', 'description' => 'Periksa kelengkapan prosedur K3 dan pelatihan.'],
-        ];
     }
 }

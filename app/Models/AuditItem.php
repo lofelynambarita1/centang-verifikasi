@@ -6,6 +6,7 @@ use Database\Factories\AuditItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AuditItem extends Model
 {
@@ -19,5 +20,10 @@ class AuditItem extends Model
     public function audit(): BelongsTo
     {
         return $this->belongsTo(Audit::class);
+    }
+
+    public function hasils(): HasMany
+    {
+        return $this->hasMany(AuditHasil::class)->orderBy('sort_order');
     }
 }

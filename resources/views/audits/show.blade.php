@@ -45,7 +45,9 @@
                     </div>
                     <div class="audit-toolbar">
                         <a class="secondary-action" href="{{ route('companies.edit', $audit->company) }}">Edit data</a>
-                        <a class="primary-action" href="{{ route('audits.report', $audit) }}">Cetak laporan</a>
+                        <a class="primary-action" href="{{ route('audits.pdf', $audit) }}">Download PDF</a>
+                        <a class="secondary-action" href="{{ route('audits.download', $audit) }}">Download Word</a>
+                        <a class="secondary-action" href="{{ route('audits.report', $audit) }}">Cetak laporan</a>
                     </div>
                 </div>
                 <div class="company-card-body">
@@ -124,49 +126,111 @@
                 @endphp
                 <div class="principle-header">{{ $activePrinciple }}. {{ $principleTitles[$activePrinciple] }}</div>
 
+                @php
+                    $criteriaMap = config('ispo.criteria', []);
+                    $previousCriteria = null;
+                @endphp
+
                 @forelse ($items as $item)
                     @php
                         preg_match('/^(\d+\.\d+\.\d+)\s*(.*)$/s', $item->title, $indicatorParts);
                         $indicatorCode = $indicatorParts[1] ?? $loop->iteration;
                         $indicatorTitle = $indicatorParts[2] ?? $item->title;
+                        $criteriaCode = $isIspoChecklist ? \App\Support\IspoChecklist::criteriaCode($item->title) : null;
+                        $criteriaInfo = $criteriaCode ? ($criteriaMap[$criteriaCode] ?? null) : null;
                     @endphp
-                    <form method="POST" action="{{ route('audit-items.update', $item) }}" class="audit-checklist-item">
-                        @csrf
-                        @method('PUT')
-                        <input type="hidden" name="page" value="{{ $currentPage }}">
 
+                    @if ($criteriaInfo && $criteriaCode !== $previousCriteria)
+                        <div class="criteria-heading">
+                            <span class="criteria-code">{{ $criteriaCode }}</span>
+                            <span class="criteria-title">{{ $criteriaInfo['title'] }}</span>
+                        </div>
+                        @if (! empty($criteriaInfo['description']))
+                            <p class="criteria-desc">{{ $criteriaInfo['description'] }}</p>
+                        @endif
+                        @php $previousCriteria = $criteriaCode; @endphp
+                    @endif
+
+                    <div class="audit-checklist-item">
                         <div class="checklist-main">
                             <div class="checklist-title-row">
                                 <div class="numbering">{{ $indicatorCode }}</div>
                                 <div class="checklist-body">
                                     <p class="checklist-gist">{{ $indicatorTitle }}</p>
-                                    <p class="checklist-desc">{{ $item->description ?: 'Tersedia dokumen dan bukti pendukung sesuai persyaratan.' }}</p>
-                                    <label class="field-label" for="note-{{ $item->id }}">Catatan pemeriksaan</label>
-                                    <textarea class="note-box" id="note-{{ $item->id }}" name="note" rows="2" placeholder="Tulis catatan atau temuan pemeriksaan...">{{ old('note', $item->note) }}</textarea>
+                                    <div class="parameter-box">
+                                        <div class="parameter-label">Parameter</div>
+                                        <div class="parameter-body">{!! nl2br(e($item->description ?: 'Tersedia dokumen dan bukti pendukung sesuai persyaratan.')) !!}</div>
+                                    </div>
+
+                                    <section class="hasil-block">
+                                        <div class="hasil-head">
+                                            <span class="field-label">Hasil Audit</span>
+                                            <span class="hasil-count">{{ $item->hasils->count() }} hasil</span>
+                                        </div>
+
+                                        @forelse ($item->hasils as $hasil)
+                                            <div class="hasil-card">
+                                                <form method="POST" action="{{ route('audit-hasils.update', $hasil) }}" enctype="multipart/form-data" class="hasil-form">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <input type="hidden" name="page" value="{{ $currentPage }}">
+                                                    <textarea class="note-box" name="content" rows="2" placeholder="Tulis hasil audit...">{{ old('content', $hasil->content) }}</textarea>
+                                                    <div class="hasil-actions">
+                                                        <label class="hasil-file">Ganti bukti
+                                                            <input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png">
+                                                        </label>
+                                                        @if ($hasil->evidence_path)
+                                                            <a class="hasil-evidence-link" href="{{ asset('storage/'.$hasil->evidence_path) }}" target="_blank" rel="noreferrer">Lihat bukti</a>
+                                                        @endif
+                                                        <button class="save-item-button" type="submit">Simpan</button>
+                                                    </div>
+                                                </form>
+                                                <form method="POST" action="{{ route('audit-hasils.destroy', $hasil) }}" class="hasil-delete-form" onsubmit="return confirm('Hapus hasil audit ini?')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <input type="hidden" name="page" value="{{ $currentPage }}">
+                                                    <button type="submit" class="hasil-delete-button">Hapus</button>
+                                                </form>
+                                            </div>
+                                        @empty
+                                            <p class="hasil-empty">Belum ada hasil audit. Tekan "Tambah hasil audit" untuk menambahkan.</p>
+                                        @endforelse
+
+                                        <details class="hasil-add">
+                                            <summary>Tambah hasil audit</summary>
+                                            <form method="POST" action="{{ route('audit-items.hasil.store', $item) }}" enctype="multipart/form-data" class="hasil-form">
+                                                @csrf
+                                                <input type="hidden" name="page" value="{{ $currentPage }}">
+                                                <textarea class="note-box" name="content" rows="2" placeholder="Tulis hasil audit atau temuan baru..."></textarea>
+                                                <div class="hasil-actions">
+                                                    <label class="hasil-file">Bukti (opsional)
+                                                        <input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png">
+                                                    </label>
+                                                    <button class="save-item-button" type="submit">Tambah</button>
+                                                </div>
+                                            </form>
+                                        </details>
+                                    </section>
                                 </div>
                             </div>
 
-                            <div class="status-row">
-                                <label for="status-{{ $item->id }}">Status:</label>
-                                <select id="status-{{ $item->id }}" name="status">
-                                    <option value="pending" @selected($item->status === 'pending')>Belum diperiksa</option>
-                                    <option value="compliant" @selected($item->status === 'compliant')>Memenuhi</option>
-                                    <option value="non_compliant" @selected($item->status === 'non_compliant')>Tidak memenuhi</option>
-                                    <option value="not_applicable" @selected($item->status === 'not_applicable')>NA</option>
-                                </select>
-                                <button class="save-item-button" type="submit">Simpan</button>
-                            </div>
+                            <form method="POST" action="{{ route('audit-items.update', $item) }}" class="item-status-form">
+                                @csrf
+                                @method('PUT')
+                                <input type="hidden" name="page" value="{{ $currentPage }}">
+                                <div class="status-row">
+                                    <label for="status-{{ $item->id }}">Status:</label>
+                                    <select id="status-{{ $item->id }}" name="status">
+                                        <option value="pending" @selected($item->status === 'pending')>Belum diperiksa</option>
+                                        <option value="compliant" @selected($item->status === 'compliant')>Memenuhi</option>
+                                        <option value="non_compliant" @selected($item->status === 'non_compliant')>Tidak memenuhi</option>
+                                        <option value="not_applicable" @selected($item->status === 'not_applicable')>NA</option>
+                                    </select>
+                                    <button class="save-item-button" type="submit">Simpan</button>
+                                </div>
+                            </form>
                         </div>
-                    </form>
-                    <form method="POST" action="{{ route('audit-items.evidence', $item) }}" class="evidence-form" enctype="multipart/form-data">
-                        @csrf
-                        <label for="evidence-{{ $item->id }}">Bukti pendukung</label>
-                        <input id="evidence-{{ $item->id }}" name="evidence" type="file" accept=".pdf,.jpg,.jpeg,.png" required>
-                        <button class="secondary-action" type="submit">Unggah bukti</button>
-                        @if ($item->evidence_path)
-                            <a href="{{ asset('storage/'.$item->evidence_path) }}" target="_blank" rel="noreferrer">Lihat bukti tersimpan</a>
-                        @endif
-                    </form>
+                    </div>
                 @empty
                     <div class="empty-grid">Belum ada prinsip verifikasi untuk audit ini.</div>
                 @endforelse
@@ -197,11 +261,19 @@
                     <div>
                         <strong>{{ $verifiedItems === $totalItems && $totalItems > 0 ? 'Semua indikator sudah diisi' : 'Audit belum selesai' }}</strong>
                         <span>{{ $verifiedItems }} dari {{ $totalItems }} indikator sudah memiliki status.</span>
+                        <span class="draft-note">Status audit: <b>{{ $audit->status === 'completed' ? 'Selesai' : 'Draft' }}</b> · data tersimpan otomatis setiap kali Anda menekan Simpan.</span>
                     </div>
-                    <form method="POST" action="{{ route('audits.complete', $audit) }}">
-                        @csrf
-                        <button class="primary-action" type="submit" @disabled($verifiedItems !== $totalItems || $totalItems === 0)>Tandai audit selesai</button>
-                    </form>
+                    <div class="completion-actions">
+                        @if ($verifiedItems === $totalItems && $totalItems > 0)
+                            <a class="primary-action" href="{{ route('audits.pdf', $audit) }}">Download 1 file lengkap (PDF)</a>
+                        @else
+                            <span class="draft-note">Lengkapi semua indikator untuk mengunduh seluruh prinsip dalam 1 file.</span>
+                        @endif
+                        <form method="POST" action="{{ route('audits.complete', $audit) }}">
+                            @csrf
+                            <button class="primary-action" type="submit" @disabled($verifiedItems !== $totalItems || $totalItems === 0)>Tandai audit selesai</button>
+                        </form>
+                    </div>
                 </div>
             </section>
         </main>
