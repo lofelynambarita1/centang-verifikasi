@@ -1,1 +1,22 @@
-<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Edit {{ $company->name }} | Centang</title>@vite(['resources/css/app.css','resources/js/app.js'])</head><body><main class="main-content"><header class="topbar"><div class="breadcrumb"><a href="{{ route('companies.show',$company) }}">Perusahaan</a><i>/</i><strong>Edit</strong></div></header><section class="page-section active"><div class="page-heading"><div><p class="eyebrow">PERUSAHAAN</p><h1>Edit data perusahaan</h1></div></div><section class="panel finding-panel company-form-panel"><form class="company-form" method="POST" action="{{ route('companies.update',$company) }}">@csrf @method('PUT') @include('companies._form', ['company' => $company])<button class="primary-button form-submit" type="submit">Simpan perubahan</button></form></section></section></main></body></html>
+@extends('layouts.app')
+
+@section('title', 'Edit '.$company->name.' | Verifikasi Audit ISPO')
+@section('eyebrow', 'PERUSAHAAN')
+@section('heading', 'Edit data perusahaan')
+
+@section('actions')
+    <a class="btn btn--ghost" href="{{ route('companies.show', $company) }}">← Kembali</a>
+@endsection
+
+@section('content')
+    <p class="page-intro">Perbarui data perusahaan. Perubahan langsung tersimpan pada semua audit yang terkait.</p>
+
+    <section class="panel panel--pad form-card">
+        <form class="form" method="POST" action="{{ route('companies.update', $company) }}">
+            @csrf
+            @method('PUT')
+            @include('companies._form', ['company' => $company])
+            <button class="btn btn--primary form-submit" type="submit">Simpan perubahan</button>
+        </form>
+    </section>
+@endsection
