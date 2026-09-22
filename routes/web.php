@@ -152,6 +152,14 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('can:update,indicator')
         ->scopeBindings()
         ->name('audit-projects.evidences.order');
+    Route::post('audit-projects/{auditProject}/work/{indicator}/evidences/{evidence}/replace', [AuditEvidenceController::class, 'replace'])
+        ->middleware('can:update,evidence')
+        ->scopeBindings()
+        ->name('audit-projects.evidences.replace');
+    Route::delete('audit-projects/{auditProject}/work/{indicator}/evidences/{evidence}', [AuditEvidenceController::class, 'remove'])
+        ->middleware('can:update,evidence')
+        ->scopeBindings()
+        ->name('audit-projects.evidences.remove');
     Route::patch('audit-projects/{auditProject}/work/{indicator}/evidences/{evidence}', [AuditEvidenceController::class, 'update'])
         ->middleware('can:update,evidence')
         ->scopeBindings()

@@ -88,6 +88,9 @@
         </div>
 
         @if ($canEdit)
+            <div class="alert" style="margin-bottom: 14px;">
+                Penghapusan evidence hanya mencatat perubahan pada audit trail. File fisik tidak langsung dimusnahkan.
+            </div>
             <form method="POST" action="{{ route('audit-projects.evidences.store', [$project, $indicator]) }}" enctype="multipart/form-data">
                 @csrf
                 @error('evidence')
@@ -169,6 +172,17 @@
                                             <input type="hidden" name="evidence_ids[]" value="{{ $orderedId }}">
                                         @endforeach
                                         <button class="btn btn--ghost btn--sm" type="submit" @disabled($isLastEvidence)>Turun</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('audit-projects.evidences.replace', [$project, $indicator, $evidence]) }}" enctype="multipart/form-data" style="display: inline-flex; gap: 4px; align-items: center;">
+                                        @csrf
+                                        <input type="file" name="evidence" required accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx">
+                                        <button class="btn btn--ghost btn--sm" type="submit">Ganti File</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('audit-projects.evidences.remove', [$project, $indicator, $evidence]) }}" style="display: inline-flex; gap: 4px; align-items: center;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <input class="input" type="text" name="removal_reason" required minlength="3" maxlength="500" placeholder="Alasan penghapusan">
+                                        <button class="btn btn--ghost btn--sm" type="submit" onclick="return confirm('Penghapusan ini hanya pencatatan audit; file fisik tidak langsung dimusnahkan.')">Hapus Evidence</button>
                                     </form>
                                 @else
                                     <span class="cell-meta">Tampilkan di Laporan: {{ $evidence->is_report_included ? 'Ya' : 'Tidak' }}</span>

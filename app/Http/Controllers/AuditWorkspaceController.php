@@ -29,7 +29,7 @@ class AuditWorkspaceController extends Controller
         $this->authorize('view', $indicator);
 
         $project = $auditProject->load('template', 'company', 'leadMember.user');
-        $indicator->load(['section.principle', 'parameters', 'assignment.pic', 'evidences.uploader']);
+        $indicator->load(['section.principle', 'parameters', 'assignment.pic', 'activeEvidences.uploader']);
 
         $result = AuditIndicatorResult::query()
             ->where('audit_project_indicator_id', $indicator->id)
@@ -45,7 +45,7 @@ class AuditWorkspaceController extends Controller
             'canEdit' => $user->can('update', $indicator),
             'versions' => $result?->versions->sortByDesc('version_number')->take(3) ?? collect(),
             'navigation' => $this->navigation($project, $user, $indicator),
-            'evidences' => $indicator->evidences->sortBy([
+            'evidences' => $indicator->activeEvidences->sortBy([
                 ['sort_order', 'asc'],
                 ['id', 'asc'],
             ]),

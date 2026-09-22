@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AuditEvidenceLifecycleStatus;
 use App\Models\AuditIndicatorEvidence;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
@@ -34,7 +35,7 @@ class AuditEvidenceService
 
             $stored = true;
             $evidence = DB::transaction(function () use ($project, $indicator, $actor, $file, $disk, $path, $extension): AuditIndicatorEvidence {
-                $sortOrder = ((int) $indicator->evidences()->lockForUpdate()->max('sort_order')) + 10;
+                $sortOrder = ((int) $indicator->activeEvidences()->lockForUpdate()->max('sort_order')) + 10;
                 $evidence = $indicator->evidences()->create([
                     'audit_project_id' => $project->id,
                     'original_name' => $file->getClientOriginalName(),
@@ -46,6 +47,7 @@ class AuditEvidenceService
                     'storage_path' => $path,
                     'uploaded_by' => $actor->id,
                     'sort_order' => $sortOrder,
+                    'lifecycle_status' => AuditEvidenceLifecycleStatus::Active,
                 ]);
 
                 $project->activityLogs()->create([
@@ -124,7 +126,7 @@ class AuditEvidenceService
         array $evidenceIds,
     ): void {
         DB::transaction(function () use ($project, $indicator, $actor, $evidenceIds): void {
-            $evidences = $indicator->evidences()->lockForUpdate()->get()->keyBy('id');
+            $evidences = $indicator->activeEvidences()->lockForUpdate()->get()->keyBy('id');
 
             if ($evidences->keys()->sort()->values()->all() !== collect($evidenceIds)->sort()->values()->all()) {
                 throw (new ModelNotFoundException)->setModel(AuditIndicatorEvidence::class);
@@ -144,5 +146,123 @@ class AuditEvidenceService
                 ],
             ]);
         });
+    }
+
+    public function remove(
+        AuditProject $project,
+        AuditProjectIndicator $indicator,
+        AuditIndicatorEvidence $evidence,
+        User $actor,
+        string $reason,
+    ): AuditIndicatorEvidence {
+        return DB::transaction(function () use ($project, $indicator, $evidence, $actor, $reason): AuditIndicatorEvidence {
+            $lockedEvidence = AuditIndicatorEvidence::query()
+                ->whereKey($evidence->id)
+                ->where('audit_project_id', $project->id)
+                ->where('audit_project_indicator_id', $indicator->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedEvidence->lifecycle_status !== AuditEvidenceLifecycleStatus::Active) {
+                throw (new ModelNotFoundException)->setModel(AuditIndicatorEvidence::class, [$lockedEvidence->id]);
+            }
+
+            $lockedEvidence->update([
+                'lifecycle_status' => AuditEvidenceLifecycleStatus::Removed,
+                'removed_at' => now(),
+                'removed_by' => $actor->id,
+                'removal_reason' => $reason,
+            ]);
+            $project->activityLogs()->create([
+                'user_id' => $actor->id,
+                'activity' => 'audit_evidence.removed',
+                'description' => 'Evidence dihapus secara logis untuk '.$indicator->code.'.',
+                'meta' => [
+                    'evidence_id' => $lockedEvidence->id,
+                    'indicator_id' => $indicator->id,
+                    'removal_reason' => $reason,
+                ],
+            ]);
+
+            return $lockedEvidence->refresh();
+        });
+    }
+
+    public function replace(
+        AuditProject $project,
+        AuditProjectIndicator $indicator,
+        AuditIndicatorEvidence $oldEvidence,
+        User $actor,
+        UploadedFile $file,
+    ): AuditIndicatorEvidence {
+        $disk = (string) config('filesystems.audit_evidence.disk', 'audit_evidence');
+        $extension = $file->extension() ?: null;
+        $filename = (string) Str::uuid().($extension ? '.'.$extension : '');
+        $path = 'project-'.$project->id.'/indicator-'.$indicator->id.'/'.$filename;
+        $stored = false;
+
+        try {
+            if (! Storage::disk($disk)->putFileAs(dirname($path), $file, basename($path))) {
+                throw new \RuntimeException('Evidence storage failed.');
+            }
+
+            $stored = true;
+
+            return DB::transaction(function () use ($project, $indicator, $oldEvidence, $actor, $file, $disk, $path, $extension): AuditIndicatorEvidence {
+                $lockedOldEvidence = AuditIndicatorEvidence::query()
+                    ->whereKey($oldEvidence->id)
+                    ->where('audit_project_id', $project->id)
+                    ->where('audit_project_indicator_id', $indicator->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ($lockedOldEvidence->lifecycle_status !== AuditEvidenceLifecycleStatus::Active) {
+                    throw (new ModelNotFoundException)->setModel(AuditIndicatorEvidence::class, [$lockedOldEvidence->id]);
+                }
+
+                $newEvidence = $indicator->evidences()->create([
+                    'audit_project_id' => $project->id,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
+                    'extension' => $extension,
+                    'size_bytes' => $file->getSize(),
+                    'sha256' => hash_file('sha256', $file->getRealPath()),
+                    'storage_disk' => $disk,
+                    'storage_path' => $path,
+                    'uploaded_by' => $actor->id,
+                    'caption' => $lockedOldEvidence->caption,
+                    'sort_order' => $lockedOldEvidence->sort_order,
+                    'is_report_included' => $lockedOldEvidence->is_report_included,
+                    'lifecycle_status' => AuditEvidenceLifecycleStatus::Active,
+                    'replaces_evidence_id' => $lockedOldEvidence->id,
+                ]);
+
+                $lockedOldEvidence->update([
+                    'lifecycle_status' => AuditEvidenceLifecycleStatus::Superseded,
+                    'superseded_at' => now(),
+                ]);
+
+                $project->activityLogs()->create([
+                    'user_id' => $actor->id,
+                    'activity' => 'audit_evidence.replaced',
+                    'description' => 'Evidence diganti untuk '.$indicator->code.'.',
+                    'meta' => [
+                        'indicator_id' => $indicator->id,
+                        'old_evidence_id' => $lockedOldEvidence->id,
+                        'new_evidence_id' => $newEvidence->id,
+                        'old_sha256' => $lockedOldEvidence->sha256,
+                        'new_sha256' => $newEvidence->sha256,
+                    ],
+                ]);
+
+                return $newEvidence;
+            });
+        } catch (Throwable $exception) {
+            if ($stored) {
+                Storage::disk($disk)->delete($path);
+            }
+
+            throw $exception;
+        }
     }
 }

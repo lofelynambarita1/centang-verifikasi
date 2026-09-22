@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\RemoveAuditEvidenceRequest;
 use App\Http\Requests\ReorderAuditEvidenceRequest;
+use App\Http\Requests\ReplaceAuditEvidenceRequest;
 use App\Http\Requests\StoreAuditEvidenceRequest;
 use App\Http\Requests\UpdateAuditEvidenceMetadataRequest;
 use App\Models\AuditIndicatorEvidence;
@@ -60,12 +62,50 @@ class AuditEvidenceController extends Controller
         return back()->with('success', 'Urutan evidence disimpan.');
     }
 
+    public function replace(
+        ReplaceAuditEvidenceRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+        AuditIndicatorEvidence $evidence,
+    ): RedirectResponse {
+        $this->ensureEvidenceScope($auditProject, $indicator, $evidence);
+
+        $this->evidences->replace(
+            $auditProject,
+            $indicator,
+            $evidence,
+            $request->user(),
+            $request->file('evidence'),
+        );
+
+        return back()->with('success', 'Evidence berhasil diganti dan jejak audit lama dipertahankan.');
+    }
+
+    public function remove(
+        RemoveAuditEvidenceRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+        AuditIndicatorEvidence $evidence,
+    ): RedirectResponse {
+        $this->ensureEvidenceScope($auditProject, $indicator, $evidence);
+
+        $this->evidences->remove(
+            $auditProject,
+            $indicator,
+            $evidence,
+            $request->user(),
+            $request->validated('removal_reason'),
+        );
+
+        return back()->with('success', 'Evidence dihapus secara logis. File fisik tetap dipertahankan untuk audit trail.');
+    }
+
     public function download(
         AuditProject $auditProject,
         AuditProjectIndicator $indicator,
         AuditIndicatorEvidence $evidence,
     ): Response {
-        abort_if($evidence->audit_project_id !== $auditProject->id, 404);
+        $this->ensureEvidenceScope($auditProject, $indicator, $evidence);
 
         $this->authorize('view', $evidence);
 
@@ -93,5 +133,18 @@ class AuditEvidenceController extends Controller
             'Content-Type' => $evidence->mime_type,
             'Content-Disposition' => "attachment; filename*=UTF-8''".rawurlencode($downloadName),
         ]);
+    }
+
+    private function ensureEvidenceScope(
+        AuditProject $project,
+        AuditProjectIndicator $indicator,
+        AuditIndicatorEvidence $evidence,
+    ): void {
+        abort_if(
+            $indicator->audit_project_id !== $project->id
+                || $evidence->audit_project_id !== $project->id
+                || $evidence->audit_project_indicator_id !== $indicator->id,
+            404,
+        );
     }
 }

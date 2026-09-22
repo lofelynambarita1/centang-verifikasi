@@ -135,6 +135,12 @@ class AuditProject extends Model
         return $this->hasMany(AuditIndicatorEvidence::class, 'audit_project_id');
     }
 
+    /** @return HasMany<AuditIndicatorEvidence, $this> */
+    public function activeEvidences(): HasMany
+    {
+        return $this->evidences()->active();
+    }
+
     /** @return HasMany<AuditIndicatorResultVersion, $this> */
     public function resultVersions(): HasMany
     {

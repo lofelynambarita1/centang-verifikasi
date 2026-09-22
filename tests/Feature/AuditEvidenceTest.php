@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AuditEvidenceLifecycleStatus;
 use App\Enums\AuditProjectStatus;
 use App\Models\ActivityLog;
 use App\Models\AuditIndicatorEvidence;
@@ -300,6 +301,9 @@ class AuditEvidenceTest extends TestCase
 
         $this->actingAs($pic)->get(route('audit-projects.work.show', [$project, $indicator]))
             ->assertSee('Upload Evidence')
+            ->assertSee('Ganti File')
+            ->assertSee('Hapus Evidence')
+            ->assertSee('file fisik tidak langsung dimusnahkan')
             ->assertSee('report.pdf');
         $this->actingAs($lead)->get(route('audit-projects.work.show', [$project, $indicator]))
             ->assertDontSee('Upload Evidence')
@@ -307,6 +311,188 @@ class AuditEvidenceTest extends TestCase
         $this->actingAs($admin)->get(route('audit-projects.work.show', [$project, $indicator]))
             ->assertDontSee('Upload Evidence')
             ->assertSee('report.pdf');
+    }
+
+    public function test_uploaded_evidence_is_active_and_logical_removal_preserves_file_and_audit_metadata(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        $content = 'removable evidence';
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->createWithContent('remove-me.pdf', $content),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+        $uploadedAt = $evidence->created_at;
+
+        $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [
+            'removal_reason' => 'Tidak lagi relevan',
+        ])->assertRedirect();
+        $evidence->refresh();
+
+        $this->assertSame(AuditEvidenceLifecycleStatus::Removed, $evidence->lifecycle_status);
+        $this->assertSame($pic->id, $evidence->removed_by);
+        $this->assertNotNull($evidence->removed_at);
+        $this->assertSame('Tidak lagi relevan', $evidence->removal_reason);
+        $this->assertSame($uploadedAt->toDateTimeString(), $evidence->created_at->toDateTimeString());
+        Storage::disk('audit_evidence')->assertExists($evidence->storage_path);
+        $this->assertSame(1, ActivityLog::where('activity', 'audit_evidence.removed')->count());
+        $this->assertSame(0, $indicator->activeEvidences()->count());
+    }
+
+    public function test_removed_evidence_is_hidden_from_workspace_and_cannot_be_removed_again(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('remove-me.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+        $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [
+            'removal_reason' => 'Sudah tidak digunakan',
+        ])->assertRedirect();
+
+        $this->actingAs($pic)->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertDontSee('remove-me.pdf')
+            ->assertSee('Belum ada evidence');
+        $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [
+            'removal_reason' => 'Coba hapus lagi',
+        ])->assertForbidden();
+    }
+
+    public function test_removal_requires_reason_and_is_restricted_to_active_pic_in_progress(): void
+    {
+        [$project, $indicator, $pic, $admin, $lead, $auditor] = $this->context(true);
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('reason.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+
+        $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [])
+            ->assertSessionHasErrors('removal_reason');
+        foreach ([$lead, $admin, $auditor] as $user) {
+            $this->actingAs($user)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [
+                'removal_reason' => 'Tidak digunakan',
+            ])->assertForbidden();
+        }
+
+        $project->update(['status' => AuditProjectStatus::Assignment->value]);
+        $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [
+            'removal_reason' => 'Tidak digunakan',
+        ])->assertForbidden();
+    }
+
+    public function test_pic_can_replace_evidence_with_new_active_row_and_inherited_metadata(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        $oldContent = 'old evidence content';
+        $newContent = 'new evidence content';
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->createWithContent('old.pdf', $oldContent),
+        ])->assertRedirect();
+        $old = AuditIndicatorEvidence::firstOrFail();
+        $this->actingAs($pic)->patch(route('audit-projects.evidences.update', [$project, $indicator, $old]), [
+            'caption' => 'Inherited caption',
+            'is_report_included' => 1,
+        ])->assertRedirect();
+        $old->refresh();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Existing result', 0);
+
+        $this->actingAs($pic)->post(route('audit-projects.evidences.replace', [$project, $indicator, $old]), [
+            'evidence' => UploadedFile::fake()->createWithContent('new.pdf', $newContent),
+        ])->assertRedirect();
+        $new = AuditIndicatorEvidence::query()->where('replaces_evidence_id', $old->id)->firstOrFail();
+        $old->refresh();
+
+        $this->assertSame(AuditEvidenceLifecycleStatus::Superseded, $old->lifecycle_status);
+        $this->assertNotNull($old->superseded_at);
+        $this->assertSame(AuditEvidenceLifecycleStatus::Active, $new->lifecycle_status);
+        $this->assertSame($old->id, $new->replaces_evidence_id);
+        $this->assertSame($old->caption, $new->caption);
+        $this->assertSame($old->sort_order, $new->sort_order);
+        $this->assertSame($old->is_report_included, $new->is_report_included);
+        $this->assertNotSame($old->storage_path, $new->storage_path);
+        $this->assertNotSame($old->sha256, $new->sha256);
+        $this->assertSame(hash('sha256', $oldContent), $old->sha256);
+        $this->assertSame(hash('sha256', $newContent), $new->sha256);
+        Storage::disk('audit_evidence')->assertExists($old->storage_path);
+        Storage::disk('audit_evidence')->assertExists($new->storage_path);
+        $this->assertSame($result->lock_version, $result->fresh()->lock_version);
+        $this->assertSame(1, $result->versions()->count());
+        $this->assertSame(1, ActivityLog::where('activity', 'audit_evidence.replaced')->count());
+        $this->assertSame(1, $indicator->activeEvidences()->count());
+    }
+
+    public function test_replacement_validation_authorization_and_active_old_evidence_are_enforced(): void
+    {
+        [$project, $indicator, $pic, $admin, $lead, $auditor] = $this->context(true);
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('old.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $old = AuditIndicatorEvidence::firstOrFail();
+
+        foreach ([$lead, $admin, $auditor] as $user) {
+            $this->actingAs($user)->post(route('audit-projects.evidences.replace', [$project, $indicator, $old]), [
+                'evidence' => UploadedFile::fake()->create('new.pdf', 10, 'application/pdf'),
+            ])->assertForbidden();
+        }
+
+        $this->actingAs($pic)->post(route('audit-projects.evidences.replace', [$project, $indicator, $old]), [
+            'evidence' => UploadedFile::fake()->create('bad.exe', 10, 'application/x-msdownload'),
+        ])->assertSessionHasErrors('evidence');
+
+        $this->actingAs($pic)->post(route('audit-projects.evidences.replace', [$project, $indicator, $old]), [
+            'evidence' => UploadedFile::fake()->create('new.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $this->actingAs($pic)->post(route('audit-projects.evidences.replace', [$project, $indicator, $old]), [
+            'evidence' => UploadedFile::fake()->create('again.pdf', 10, 'application/pdf'),
+        ])->assertForbidden();
+    }
+
+    public function test_removed_and_superseded_evidence_are_excluded_from_active_queries(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        foreach (['remove.pdf', 'replace.pdf', 'active.pdf'] as $name) {
+            $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+                'evidence' => UploadedFile::fake()->create($name, 10, 'application/pdf'),
+            ])->assertRedirect();
+        }
+        $evidences = AuditIndicatorEvidence::orderBy('id')->get();
+        $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidences[0]]), [
+            'removal_reason' => 'Tidak digunakan',
+        ])->assertRedirect();
+        $this->actingAs($pic)->post(route('audit-projects.evidences.replace', [$project, $indicator, $evidences[1]]), [
+            'evidence' => UploadedFile::fake()->create('replacement.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+
+        $this->assertSame(4, $indicator->evidences()->count());
+        $this->assertSame(2, $indicator->activeEvidences()->count());
+        $this->assertSame(2, $project->activeEvidences()->count());
+        $this->actingAs($pic)->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertSee('active.pdf')
+            ->assertDontSee('remove.pdf')
+            ->assertDontSee('replace.pdf');
+    }
+
+    public function test_cross_project_and_cross_indicator_remove_and_replace_routes_return_not_found(): void
+    {
+        [$projectA, $indicatorA, $picA, $admin] = $this->context(true);
+        [$projectB, $indicatorB, $picB] = $this->context();
+        Storage::fake('audit_evidence');
+        $this->actingAs($picB)->post(route('audit-projects.evidences.store', [$projectB, $indicatorB]), [
+            'evidence' => UploadedFile::fake()->create('foreign.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $foreign = AuditIndicatorEvidence::firstOrFail();
+
+        $this->actingAs($admin)->delete(route('audit-projects.evidences.remove', [$projectA, $indicatorA, $foreign]), [
+            'removal_reason' => 'Tidak digunakan',
+        ])->assertNotFound();
+        $this->actingAs($admin)->post(route('audit-projects.evidences.replace', [$projectA, $indicatorA, $foreign]), [
+            'evidence' => UploadedFile::fake()->create('new.pdf', 10, 'application/pdf'),
+        ])->assertNotFound();
     }
 
     /**
