@@ -8,7 +8,9 @@ use App\Models\AuditTemplate;
 use App\Models\Company;
 use App\Models\User;
 use App\Services\AssignmentService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class AuditAssignmentTest extends TestCase
@@ -54,7 +56,10 @@ class AuditAssignmentTest extends TestCase
             'auditor_ids' => array_map(fn (User $u): int => $u->id, $auditors),
         ]);
 
-        return AuditProject::where('name', 'Audit Penugasan')->firstOrFail();
+        $project = AuditProject::where('name', 'Audit Penugasan')->firstOrFail();
+        $project->update(['status' => AuditProjectStatus::Assignment->value]);
+
+        return $project;
     }
 
     public function test_single_indicator_assignment_creates_assignment_history_and_log(): void
@@ -513,6 +518,152 @@ class AuditAssignmentTest extends TestCase
         $this->assertSame(2, (int) $workloads[$auditorA->id]->assignments_count);
         $this->assertSame(1, (int) $workloads[$auditorB->id]->assignments_count);
         $this->assertSame(0, (int) $workloads[$lead->id]->assignments_count);
+    }
+
+    public function test_draft_project_cannot_assign(): void
+    {
+        $this->assertStatusBlocksAssignment(AuditProjectStatus::Draft);
+    }
+
+    public function test_team_setup_project_cannot_assign(): void
+    {
+        $this->assertStatusBlocksAssignment(AuditProjectStatus::TeamSetup);
+    }
+
+    public function test_in_progress_project_cannot_assign(): void
+    {
+        $this->assertStatusBlocksAssignment(AuditProjectStatus::InProgress);
+    }
+
+    public function test_review_final_and_archived_projects_cannot_assign(): void
+    {
+        foreach ([AuditProjectStatus::Review, AuditProjectStatus::Final, AuditProjectStatus::Archived] as $status) {
+            $this->assertStatusBlocksAssignment($status);
+        }
+    }
+
+    public function test_assignment_status_allows_assigning(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor]);
+        $indicator = $project->snapshotIndicators()->firstOrFail();
+
+        app(AssignmentService::class)->assign($project, $indicator, $auditor, $admin);
+
+        $this->assertSame($auditor->id, $indicator->fresh()->assignment->pic_user_id);
+    }
+
+    public function test_bulk_and_auto_assignment_are_rejected_outside_assignment_status(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor]);
+        $project->update(['status' => AuditProjectStatus::InProgress->value]);
+        $principle = $project->snapshotPrinciples()->firstOrFail();
+
+        try {
+            app(AssignmentService::class)->assignPrinciple($project, $principle->id, $auditor, $admin);
+            $this->fail('Bulk Principle assignment must be rejected while the project is in progress.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('status', $e->errors());
+        }
+
+        try {
+            app(AssignmentService::class)->autoAssign($project, [$auditor->id], $admin);
+            $this->fail('Auto assignment must be rejected while the project is in progress.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('status', $e->errors());
+        }
+
+        $this->assertSame(0, $project->assignments()->count());
+    }
+
+    public function test_assignment_history_survives_referenced_user_deletion(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditorA = User::factory()->auditor()->create();
+        $auditorB = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditorA, $auditorB]);
+        $indicator = $project->snapshotIndicators()->firstOrFail();
+
+        $service = app(AssignmentService::class);
+        $service->assign($project, $indicator, $auditorB, $admin);
+        $service->assign($project, $indicator, $auditorA, $admin);
+        $service->assign($project, $indicator, $auditorB, $admin);
+
+        $this->assertSame(3, $project->assignmentHistories()->count(), 'three assignments must be recorded');
+
+        $auditorA->delete();
+
+        $this->assertDatabaseMissing('users', ['id' => $auditorA->id]);
+        $this->assertSame(3, $project->assignmentHistories()->count(), 'history rows must never be cascade-deleted');
+        $this->assertDatabaseHas('audit_assignment_histories', [
+            'audit_project_indicator_id' => $indicator->id,
+            'to_user_id' => $auditorB->id,
+        ]);
+        $this->assertDatabaseHas('audit_assignment_histories', [
+            'audit_project_indicator_id' => $indicator->id,
+            'from_user_id' => null,
+        ]);
+        $this->assertDatabaseHas('audit_assignment_histories', [
+            'audit_project_indicator_id' => $indicator->id,
+            'to_user_id' => null,
+        ]);
+        $this->assertDatabaseHas('audit_assignment_histories', [
+            'audit_project_indicator_id' => $indicator->id,
+            'changed_by' => $admin->id,
+        ]);
+        $this->assertDatabaseHas('audit_indicator_assignments', [
+            'audit_project_indicator_id' => $indicator->id,
+            'pic_user_id' => $auditorB->id,
+        ]);
+    }
+
+    public function test_active_pic_user_cannot_be_physically_deleted(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor]);
+        $indicator = $project->snapshotIndicators()->firstOrFail();
+
+        app(AssignmentService::class)->assign($project, $indicator, $auditor, $admin);
+
+        try {
+            $auditor->delete();
+            $this->fail('Physically deleting an active PIC must be blocked by the database.');
+        } catch (QueryException $e) {
+            $this->assertStringContainsStringIgnoringCase('foreign key', $e->getMessage());
+        }
+
+        $this->assertDatabaseHas('users', ['id' => $auditor->id]);
+        $this->assertDatabaseHas('audit_indicator_assignments', [
+            'audit_project_indicator_id' => $indicator->id,
+            'pic_user_id' => $auditor->id,
+        ]);
+    }
+
+    private function assertStatusBlocksAssignment(AuditProjectStatus $status): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor]);
+        $project->update(['status' => $status->value]);
+        $indicator = $project->snapshotIndicators()->firstOrFail();
+
+        try {
+            app(AssignmentService::class)->assign($project, $indicator, $auditor, $admin);
+            $this->fail('Assignment must be rejected when project status is "'.$status->value.'".');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('status', $e->errors());
+        }
+
+        $this->assertDatabaseMissing('audit_indicator_assignments', ['audit_project_indicator_id' => $indicator->id]);
     }
 
     /**

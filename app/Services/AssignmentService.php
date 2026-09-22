@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AuditProjectStatus;
 use App\Models\AuditIndicatorAssignment;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
@@ -26,6 +27,7 @@ class AssignmentService
      */
     public function assign(AuditProject $project, AuditProjectIndicator $indicator, User $pic, User $actor, ?string $reason = null): AuditIndicatorAssignment
     {
+        $this->assertAssignableStatus($project);
         $this->assertIndicatorBelongsToProject($project, $indicator);
         $this->ensureProjectMember($project, $pic);
 
@@ -66,6 +68,7 @@ class AssignmentService
      */
     public function assignPrinciple(AuditProject $project, int $principleId, User $pic, User $actor): array
     {
+        $this->assertAssignableStatus($project);
         $this->ensureProjectMember($project, $pic);
 
         if (! $project->snapshotPrinciples()->whereKey($principleId)->exists()) {
@@ -91,6 +94,7 @@ class AssignmentService
      */
     public function assignSection(AuditProject $project, int $sectionId, User $pic, User $actor): array
     {
+        $this->assertAssignableStatus($project);
         $this->ensureProjectMember($project, $pic);
 
         $sectionIds = $this->sectionAndDescendantIds($project, $sectionId);
@@ -110,6 +114,8 @@ class AssignmentService
      */
     public function autoAssign(AuditProject $project, array $picUserIds, User $actor): int
     {
+        $this->assertAssignableStatus($project);
+
         $members = collect($picUserIds)->map(fn ($id): int => (int) $id)->unique()->values();
 
         if ($members->isEmpty()) {
@@ -304,6 +310,20 @@ class AssignmentService
         }
 
         return $ids;
+    }
+
+    /**
+     * Assignment mutations are only legal while the project is in the
+     * "assignment" status. Draft, team onboarding, an in-progress audit and
+     * everything after it must not let anyone touch who the PIC is.
+     */
+    private function assertAssignableStatus(AuditProject $project): void
+    {
+        if ($project->status !== AuditProjectStatus::Assignment) {
+            throw ValidationException::withMessages([
+                'status' => 'Penugasan indikator hanya dapat diubah ketika project berstatus "Penugasan Indikator" (assignment).',
+            ]);
+        }
     }
 
     private function assertIndicatorBelongsToProject(AuditProject $project, AuditProjectIndicator $indicator): void

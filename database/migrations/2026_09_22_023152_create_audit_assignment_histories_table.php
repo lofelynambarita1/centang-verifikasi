@@ -16,8 +16,8 @@ return new class extends Migration
             $table->foreignId('audit_project_id')->constrained('audit_projects')->cascadeOnDelete();
             $table->foreignId('audit_project_indicator_id')->constrained('audit_project_indicators')->cascadeOnDelete();
             $table->foreignId('from_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('to_user_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('changed_by')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('to_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('changed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->string('reason')->nullable();
             $table->timestamp('created_at');
 
