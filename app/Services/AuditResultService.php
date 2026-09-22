@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AuditAssessmentStatus;
 use App\Enums\AuditProjectStatus;
 use App\Models\AuditIndicatorResult;
 use App\Models\AuditProject;
@@ -28,8 +29,14 @@ class AuditResultService
      *                                    require zero and existing results
      *                                    must match exactly
      */
-    public function saveDraft(AuditProject $project, AuditProjectIndicator $indicator, User $actor, string $resultText, int $expectedLockVersion): AuditIndicatorResult
-    {
+    public function saveDraft(
+        AuditProject $project,
+        AuditProjectIndicator $indicator,
+        User $actor,
+        string $resultText,
+        int $expectedLockVersion,
+        ?AuditAssessmentStatus $assessmentStatus = null,
+    ): AuditIndicatorResult {
         $this->assertIndicatorBelongsToProject($project, $indicator);
         $this->assertProjectInProgress($project);
         $this->assertActorIsPic($project, $indicator, $actor);
@@ -42,7 +49,7 @@ class AuditResultService
             ]);
         }
 
-        return DB::transaction(function () use ($project, $indicator, $actor, $resultText, $expectedLockVersion): AuditIndicatorResult {
+        return DB::transaction(function () use ($project, $indicator, $actor, $resultText, $expectedLockVersion, $assessmentStatus): AuditIndicatorResult {
             $result = AuditIndicatorResult::query()
                 ->where('audit_project_id', $project->id)
                 ->where('audit_project_indicator_id', $indicator->id)
@@ -54,32 +61,33 @@ class AuditResultService
                     $this->throwLockConflict();
                 }
 
-                return $this->createResult($project, $indicator, $actor, $resultText);
+                return $this->createResult($project, $indicator, $actor, $resultText, $assessmentStatus);
             }
 
             if ($expectedLockVersion !== $result->lock_version) {
                 $this->throwLockConflict();
             }
 
-            if ($result->result_text === $resultText) {
+            if ($result->result_text === $resultText && $result->assessment_status === $assessmentStatus) {
                 return $result;
             }
 
-            return $this->persistUpdatedResult($project, $indicator, $actor, $result, $resultText);
+            return $this->persistUpdatedResult($project, $indicator, $actor, $result, $resultText, $assessmentStatus);
         });
     }
 
-    private function createResult(AuditProject $project, AuditProjectIndicator $indicator, User $actor, string $resultText): AuditIndicatorResult
+    private function createResult(AuditProject $project, AuditProjectIndicator $indicator, User $actor, string $resultText, ?AuditAssessmentStatus $assessmentStatus): AuditIndicatorResult
     {
         $result = $project->results()->create([
             'audit_project_indicator_id' => $indicator->id,
             'result_text' => $resultText,
+            'assessment_status' => $assessmentStatus,
             'created_by' => $actor->id,
             'updated_by' => $actor->id,
             'lock_version' => 1,
         ]);
 
-        $this->recordVersion($result, 1, $resultText, $actor, $project, $indicator);
+        $this->recordVersion($result, 1, $resultText, $assessmentStatus, $actor, $project, $indicator);
         $this->log($project, $actor, 'audit_result.created', sprintf(
             'Draft Hasil Audit indikator "%s" dibuat.',
             $indicator->code,
@@ -91,17 +99,18 @@ class AuditResultService
         return $result;
     }
 
-    private function persistUpdatedResult(AuditProject $project, AuditProjectIndicator $indicator, User $actor, AuditIndicatorResult $result, string $resultText): AuditIndicatorResult
+    private function persistUpdatedResult(AuditProject $project, AuditProjectIndicator $indicator, User $actor, AuditIndicatorResult $result, string $resultText, ?AuditAssessmentStatus $assessmentStatus): AuditIndicatorResult
     {
         $nextVersion = (int) $result->versions()->max('version_number') + 1;
 
         $result->update([
             'result_text' => $resultText,
+            'assessment_status' => $assessmentStatus,
             'updated_by' => $actor->id,
             'lock_version' => $result->lock_version + 1,
         ]);
 
-        $this->recordVersion($result, $nextVersion, $resultText, $actor, $project, $indicator);
+        $this->recordVersion($result, $nextVersion, $resultText, $assessmentStatus, $actor, $project, $indicator);
         $this->log($project, $actor, 'audit_result.updated', sprintf(
             'Draft Hasil Audit indikator "%s" diperbarui.',
             $indicator->code,
@@ -113,13 +122,14 @@ class AuditResultService
         return $result;
     }
 
-    private function recordVersion(AuditIndicatorResult $result, int $versionNumber, string $content, User $actor, AuditProject $project, AuditProjectIndicator $indicator): void
+    private function recordVersion(AuditIndicatorResult $result, int $versionNumber, string $content, ?AuditAssessmentStatus $assessmentStatus, User $actor, AuditProject $project, AuditProjectIndicator $indicator): void
     {
         $result->versions()->create([
             'audit_project_id' => $project->id,
             'audit_project_indicator_id' => $indicator->id,
             'version_number' => $versionNumber,
             'result_text' => $content,
+            'assessment_status' => $assessmentStatus,
             'changed_by' => $actor->id,
             'created_at' => now(),
         ]);

@@ -61,6 +61,7 @@ class AuditWorkspaceController extends Controller
             $request->user(),
             $request->string('result_text')->trim()->toString(),
             $request->expectedLockVersion(),
+            $request->assessmentStatus(),
         );
 
         return back()->with('success', 'Draft Hasil Audit disimpan.');

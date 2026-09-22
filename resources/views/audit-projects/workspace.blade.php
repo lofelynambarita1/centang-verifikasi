@@ -107,6 +107,9 @@
                 @error('lock_version')
                     <div class="alert alert--error">{{ $message }}</div>
                 @enderror
+                @error('assessment_status')
+                    <div class="alert alert--error">{{ $message }}</div>
+                @enderror
 
                 <textarea
                     class="textarea textarea--lg"
@@ -115,6 +118,23 @@
                     placeholder="Tulis hasil audit untuk indikator ini…"
                 >{{ old('result_text', $result?->result_text ?? '') }}</textarea>
 
+                <fieldset style="border: 0; padding: 0; margin: 20px 0 0;">
+                    <legend style="font-weight: 700; margin-bottom: 8px;">Status Penilaian</legend>
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                        @foreach (\App\Enums\AuditAssessmentStatus::cases() as $status)
+                            <label style="display: inline-flex; align-items: center; gap: 7px;">
+                                <input
+                                    type="radio"
+                                    name="assessment_status"
+                                    value="{{ $status->value }}"
+                                    @checked(old('assessment_status', $result?->assessment_status?->value) === $status->value)
+                                >
+                                {{ $status->label() }}
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
+
                 <div class="form-actions">
                     <button class="btn btn--primary" type="submit">Simpan Draft</button>
                 </div>
@@ -122,6 +142,16 @@
         @else
             <div class="result-text">
                 {{ $result?->result_text ?? 'BELUM DIKERJAKAN' }}
+            </div>
+            <div style="margin-top: 16px;">
+                <strong>Status Penilaian</strong>
+                <div style="margin-top: 6px;">
+                    @if ($result?->assessment_status)
+                        <span class="chip chip--done">{{ $result->assessment_status->label() }}</span>
+                    @else
+                        <span class="chip chip--none">Belum Dipilih</span>
+                    @endif
+                </div>
             </div>
         @endif
     </section>
@@ -146,6 +176,11 @@
                                     {{ $version->created_at->format('d M Y H:i') }} ·
                                     {{ $version->changer?->name ?? 'Akun terhapus' }}
                                 </span>
+                                @if ($version->assessment_status)
+                                    <span class="chip chip--todo">{{ $version->assessment_status->label() }}</span>
+                                @else
+                                    <span class="chip chip--none">Belum Dipilih</span>
+                                @endif
                             </div>
                         </div>
                     </li>

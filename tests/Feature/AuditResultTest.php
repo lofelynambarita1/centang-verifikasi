@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AuditAssessmentStatus;
 use App\Enums\AuditProjectStatus;
 use App\Models\ActivityLog;
 use App\Models\AuditIndicatorResult;
@@ -250,6 +251,7 @@ class AuditResultTest extends TestCase
         $this->actingAs($auditorB)
             ->put(route('audit-projects.work.save-draft', [$project, $indicator]), [
                 'result_text' => 'Tidak boleh.',
+                'assessment_status' => AuditAssessmentStatus::Memenuhi->value,
                 'lock_version' => 0,
             ])
             ->assertForbidden();
@@ -696,5 +698,129 @@ class AuditResultTest extends TestCase
 
         $this->expectException(ValidationException::class);
         $service->saveDraft($project, $indicator, $auditor, 'Konten sama.', 0);
+    }
+
+    public function test_new_result_has_null_assessment_status_by_default_and_in_version_one(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $auditor, 'Tanpa status.', 0);
+
+        $this->assertNull($result->assessment_status);
+        $this->assertNull($result->versions()->firstOrFail()->assessment_status);
+    }
+
+    public function test_each_valid_assessment_status_can_be_saved(): void
+    {
+        foreach (AuditAssessmentStatus::cases() as $status) {
+            [$project, $indicator, $auditor] = $this->assessmentContext();
+
+            $result = app(AuditResultService::class)->saveDraft($project, $indicator, $auditor, 'Status '.$status->value, 0, $status);
+
+            $this->assertSame($status, $result->assessment_status);
+            $this->assertSame($status, $result->versions()->firstOrFail()->assessment_status);
+        }
+    }
+
+    public function test_invalid_assessment_status_is_rejected(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+
+        $this->actingAs($auditor)
+            ->put(route('audit-projects.work.save-draft', [$project, $indicator]), [
+                'result_text' => 'Status invalid.',
+                'assessment_status' => 'invalid',
+                'lock_version' => 0,
+            ])
+            ->assertSessionHasErrors('assessment_status');
+    }
+
+    public function test_status_only_change_creates_version_and_increments_lock_version(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $service = app(AuditResultService::class);
+        $service->saveDraft($project, $indicator, $auditor, 'Isi tetap.', 0, AuditAssessmentStatus::Memenuhi);
+
+        $result = $service->saveDraft($project, $indicator, $auditor, 'Isi tetap.', 1, AuditAssessmentStatus::TidakMemenuhi);
+
+        $this->assertSame(2, $result->lock_version);
+        $this->assertSame(AuditAssessmentStatus::TidakMemenuhi, $result->assessment_status);
+        $this->assertSame(2, $result->versions()->count());
+        $this->assertSame(AuditAssessmentStatus::TidakMemenuhi, $result->versions()->latest('version_number')->firstOrFail()->assessment_status);
+    }
+
+    public function test_identical_text_and_status_is_a_no_op(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $service = app(AuditResultService::class);
+        $result = $service->saveDraft($project, $indicator, $auditor, 'Tetap sama.', 0, AuditAssessmentStatus::Na);
+        $before = $result->fresh();
+        $versionCount = $result->versions()->count();
+        $activityCount = ActivityLog::where('audit_project_id', $project->id)->count();
+
+        $service->saveDraft($project, $indicator, $auditor, 'Tetap sama.', 1, AuditAssessmentStatus::Na);
+        $after = $result->fresh();
+
+        $this->assertSame($before->lock_version, $after->lock_version);
+        $this->assertEquals($before->updated_at, $after->updated_at);
+        $this->assertSame($before->updated_by, $after->updated_by);
+        $this->assertSame($versionCount, $after->versions()->count());
+        $this->assertSame($activityCount, ActivityLog::where('audit_project_id', $project->id)->count());
+    }
+
+    public function test_stale_status_change_is_rejected_without_changing_status_or_version(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $service = app(AuditResultService::class);
+        $service->saveDraft($project, $indicator, $auditor, 'Status lama.', 0, AuditAssessmentStatus::Memenuhi);
+        $service->saveDraft($project, $indicator, $auditor, 'Status baru.', 1, AuditAssessmentStatus::TidakMemenuhi);
+        $before = $indicator->fresh()->result;
+        $versionCount = $before->versions()->count();
+
+        try {
+            $service->saveDraft($project, $indicator, $auditor, 'Status stale.', 1, AuditAssessmentStatus::Na);
+            $this->fail('Stale status save must be rejected.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('lock_version', $e->errors());
+        }
+
+        $after = $indicator->fresh()->result;
+        $this->assertSame(AuditAssessmentStatus::TidakMemenuhi, $after->assessment_status);
+        $this->assertSame($versionCount, $after->versions()->count());
+    }
+
+    public function test_lead_and_admin_can_only_view_the_assessment_status(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor]);
+        $indicator = $project->snapshotIndicators()->where('code', '1.1.2')->firstOrFail();
+        $this->assignAsPic($project, $indicator, $auditor, $admin);
+        app(AuditResultService::class)->saveDraft($project, $indicator, $auditor, 'Hasil berstatus.', 0, AuditAssessmentStatus::Memenuhi);
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('Memenuhi')
+            ->assertSee('Read only');
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('Memenuhi')
+            ->assertSee('Read only');
+    }
+
+    private function assessmentContext(): array
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor]);
+        $indicator = $project->snapshotIndicators()->where('code', '1.1.2')->firstOrFail();
+        $this->assignAsPic($project, $indicator, $auditor, $admin);
+
+        return [$project, $indicator, $auditor];
     }
 }

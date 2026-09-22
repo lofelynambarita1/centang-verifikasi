@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AuditAssessmentStatus;
 use Database\Factories\AuditIndicatorResultFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,12 +15,15 @@ class AuditIndicatorResult extends Model
     use HasFactory;
 
     protected $fillable = [
-        'audit_project_id', 'audit_project_indicator_id', 'result_text', 'created_by', 'updated_by', 'lock_version',
+        'audit_project_id', 'audit_project_indicator_id', 'result_text', 'assessment_status', 'created_by', 'updated_by', 'lock_version',
     ];
 
     protected function casts(): array
     {
-        return ['lock_version' => 'integer'];
+        return [
+            'assessment_status' => AuditAssessmentStatus::class,
+            'lock_version' => 'integer',
+        ];
     }
 
     public function project(): BelongsTo

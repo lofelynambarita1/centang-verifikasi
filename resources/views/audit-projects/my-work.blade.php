@@ -68,6 +68,11 @@
                                 @else
                                     <span class="chip chip--none">BELUM DIKERJAKAN</span>
                                 @endif
+                                @if ($indicator->result?->assessment_status)
+                                    <span class="chip chip--todo">{{ $indicator->result->assessment_status->label() }}</span>
+                                @else
+                                    <span class="chip chip--none">Belum Dipilih</span>
+                                @endif
                             </td>
                             <td style="text-align: right;">
                                 <a class="btn btn--ghost btn--sm" href="{{ route('audit-projects.work.show', [$project, $indicator]) }}">Kerjakan</a>

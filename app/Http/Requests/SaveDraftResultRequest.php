@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\AuditAssessmentStatus;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class SaveDraftResultRequest extends FormRequest
 {
@@ -22,6 +24,7 @@ class SaveDraftResultRequest extends FormRequest
     {
         return [
             'result_text' => ['required', 'string'],
+            'assessment_status' => ['nullable', Rule::enum(AuditAssessmentStatus::class)],
             'lock_version' => ['required', 'integer', 'min:0'],
         ];
     }
@@ -29,5 +32,10 @@ class SaveDraftResultRequest extends FormRequest
     public function expectedLockVersion(): int
     {
         return (int) $this->input('lock_version');
+    }
+
+    public function assessmentStatus(): ?AuditAssessmentStatus
+    {
+        return $this->enum('assessment_status', AuditAssessmentStatus::class);
     }
 }
