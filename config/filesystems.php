@@ -30,6 +30,13 @@ return [
 
     'disks' => [
 
+        'audit_evidence' => [
+            'driver' => env('AUDIT_EVIDENCE_FILESYSTEM', 'local'),
+            'root' => env('AUDIT_EVIDENCE_ROOT', storage_path('app/audit-evidence')),
+            'throw' => false,
+            'report' => false,
+        ],
+
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
@@ -75,6 +82,11 @@ return [
 
     'links' => [
         public_path('storage') => storage_path('app/public'),
+    ],
+
+    'audit_evidence' => [
+        'disk' => env('AUDIT_EVIDENCE_DISK', 'audit_evidence'),
+        'max_mb' => (int) env('AUDIT_EVIDENCE_MAX_MB', 25),
     ],
 
 ];

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\AuditEvidenceController;
 use App\Http\Controllers\AuditProjectAssignmentController;
 use App\Http\Controllers\AuditProjectController;
 use App\Http\Controllers\AuditProjectMemberController;
@@ -139,4 +140,12 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('can:update,indicator')
         ->scopeBindings()
         ->name('audit-projects.work.autosave');
+    Route::post('audit-projects/{auditProject}/work/{indicator}/evidences', [AuditEvidenceController::class, 'store'])
+        ->middleware('can:update,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.evidences.store');
+    Route::get('audit-projects/{auditProject}/work/{indicator}/evidences/{evidence}/download', [AuditEvidenceController::class, 'download'])
+        ->middleware('can:view,evidence')
+        ->scopeBindings()
+        ->name('audit-projects.evidences.download');
 });

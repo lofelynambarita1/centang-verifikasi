@@ -48,4 +48,16 @@ class AuditProjectIndicator extends Model
     {
         return $this->hasOne(AuditIndicatorResult::class, 'audit_project_indicator_id');
     }
+
+    /** @return HasMany<AuditIndicatorEvidence, $this> */
+    public function evidences(): HasMany
+    {
+        return $this->hasMany(AuditIndicatorEvidence::class, 'audit_project_indicator_id');
+    }
+
+    /** @return HasMany<AuditIndicatorEvidence, $this> */
+    public function evidence(): HasMany
+    {
+        return $this->evidences();
+    }
 }

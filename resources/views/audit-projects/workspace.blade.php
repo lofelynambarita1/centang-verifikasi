@@ -82,6 +82,65 @@
     <section class="panel panel--pad">
         <div class="panel__head">
             <div>
+                <h2>Evidence</h2>
+                <p>File pendukung tersimpan secara private dan hanya dapat diunduh oleh pengguna berwenang.</p>
+            </div>
+        </div>
+
+        @if ($canEdit)
+            <form method="POST" action="{{ route('audit-projects.evidences.store', [$project, $indicator]) }}" enctype="multipart/form-data">
+                @csrf
+                @error('evidence')
+                    <div class="alert alert--error">{{ $message }}</div>
+                @enderror
+                <input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx" required>
+                <div class="form-actions">
+                    <button class="btn btn--primary" type="submit">Upload Evidence</button>
+                    <span class="cell-meta">PDF, JPG, PNG, WEBP, DOCX, XLSX · maksimal {{ config('filesystems.audit_evidence.max_mb') }} MB</span>
+                </div>
+            </form>
+        @endif
+
+        @if ($evidences->isNotEmpty())
+            <div class="table-wrap" style="margin-top: 18px;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Nama file</th>
+                            <th>Tipe</th>
+                            <th>Ukuran</th>
+                            <th>Uploader</th>
+                            <th>Diunggah</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach ($evidences as $evidence)
+                        <tr>
+                            <td>{{ $evidence->original_name }}</td>
+                            <td>{{ $evidence->mime_type }}</td>
+                            <td>{{ number_format($evidence->size_bytes / 1024, 1) }} KB</td>
+                            <td>{{ $evidence->uploader?->name ?? 'Akun terhapus' }}</td>
+                            <td>{{ $evidence->created_at->format('d M Y H:i') }}</td>
+                            <td style="text-align: right;">
+                                <a class="btn btn--ghost btn--sm" href="{{ route('audit-projects.evidences.download', [$project, $indicator, $evidence]) }}">Download</a>
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <div class="empty">
+                <strong>Belum ada evidence</strong>
+                <span>Evidence belum diunggah untuk indikator ini.</span>
+            </div>
+        @endif
+    </section>
+
+    <section class="panel panel--pad">
+        <div class="panel__head">
+            <div>
                 <h2>Hasil Audit</h2>
                 <p>
                     @if ($canEdit)

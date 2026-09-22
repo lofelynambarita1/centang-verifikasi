@@ -50,6 +50,12 @@ class User extends Authenticatable
         return $this->hasMany(AuditProjectMember::class);
     }
 
+    /** @return HasMany<AuditIndicatorEvidence, $this> */
+    public function uploadedAuditEvidences(): HasMany
+    {
+        return $this->hasMany(AuditIndicatorEvidence::class, 'uploaded_by');
+    }
+
     /**
      * @return BelongsToMany<AuditProject, $this>
      */
