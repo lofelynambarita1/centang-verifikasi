@@ -1,0 +1,113 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\AuditTemplate;
+use App\Models\AuditTemplatePrinciple;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use RuntimeException;
+
+class TemplateJsonImporter
+{
+    /**
+     * Import a template structure from a JSON file into the master tables.
+     * The import is idempotent: running it again replaces the structure of the
+     * same template with the exact content of the file.
+     */
+    public function importFromPath(string $path, ?User $actor = null): AuditTemplate
+    {
+        if (! File::exists($path)) {
+            throw new RuntimeException("File data template tidak ditemukan: {$path}");
+        }
+
+        return $this->importFromArray(json_decode(File::get($path), true, 512, JSON_THROW_ON_ERROR), $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function importFromArray(array $data, ?User $actor = null): AuditTemplate
+    {
+        $meta = $data['_meta'] ?? [];
+
+        if (empty($meta['template_code'])) {
+            throw new RuntimeException('Meta template_code wajib ada pada file struktur template.');
+        }
+
+        $template = AuditTemplate::updateOrCreate(
+            ['code' => $meta['template_code']],
+            [
+                'scheme' => $meta['template_scheme'] ?? null,
+                'name' => $meta['template_name'] ?? $meta['template_code'],
+                'version' => $meta['template_version'] ?? null,
+                'description' => $meta['dataset_status'] ?? null,
+                'is_active' => true,
+                'created_by' => $actor?->id,
+            ],
+        );
+
+        DB::transaction(function () use ($template, $data): void {
+            $this->replaceStructure($template, $data['principles'] ?? []);
+        });
+
+        return $template;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $principles
+     */
+    private function replaceStructure(AuditTemplate $template, array $principles): void
+    {
+        foreach ($principles as $principleData) {
+            $template->principles()->where('code', $principleData['code'])->delete();
+
+            $principle = $template->principles()->create([
+                'code' => $principleData['code'],
+                'title' => $principleData['title'],
+                'description' => $principleData['description'] ?? null,
+                'sort_order' => $principleData['sort_order'] ?? 0,
+            ]);
+
+            $this->createSections($principle, $principleData['sections'] ?? [], null);
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $sections
+     */
+    private function createSections(AuditTemplatePrinciple $principle, array $sections, ?int $parentId): void
+    {
+        foreach ($sections as $sectionData) {
+            $section = $principle->sections()->create([
+                'parent_id' => $parentId,
+                'code' => $sectionData['code'],
+                'title' => $sectionData['title'],
+                'description' => $sectionData['description'] ?? null,
+                'sort_order' => $sectionData['sort_order'] ?? 0,
+            ]);
+
+            $this->createSections($principle, $sectionData['sections'] ?? [], $section->id);
+
+            foreach ($sectionData['indicators'] ?? [] as $indicatorData) {
+                $indicator = $section->indicators()->create([
+                    'code' => $indicatorData['code'],
+                    'title' => $indicatorData['title'],
+                    'description' => $indicatorData['description'] ?? null,
+                    'indicator_type' => $indicatorData['indicator_type'] ?? null,
+                    'sort_order' => $indicatorData['sort_order'] ?? 0,
+                ]);
+
+                foreach ($indicatorData['parameters'] ?? [] as $parameterData) {
+                    $indicator->parameters()->create([
+                        'parameter_type' => $parameterData['parameter_type'],
+                        'number' => $parameterData['number'] ?? null,
+                        'content' => $parameterData['content'],
+                        'sort_order' => $parameterData['sort_order'] ?? 0,
+                    ]);
+                }
+            }
+        }
+    }
+}

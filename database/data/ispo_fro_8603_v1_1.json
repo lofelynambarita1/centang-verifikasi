@@ -1,0 +1,148 @@
+{
+  "_meta": {
+    "template_code": "FrO.8603/GIS-1.1",
+    "template_scheme": "ISPO",
+    "template_name": "Laporan Verifikasi Hasil ISPO",
+    "template_version": "1.1",
+    "dataset_status": "SAMPLE - struktur contoh berisi data placeholder. Dataset lengkap ISPO belum tersedia di codebase dan harus diimpor dari dokumen sumber (FrO.8603/GIS dan Permentan tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia). Importer menerima struktur penuh tanpa mengubah kode."
+  },
+  "principles": [
+    {
+      "code": "1",
+      "title": "Prinsip 1 — Contoh prinsip (SAMPLE, placeholder)",
+      "description": "TEMPAT SEMENTARA: judul dan deskripsi asli harus dimasukkan dari dokumen sumber.",
+      "sort_order": 1,
+      "sections": [
+        {
+          "code": "1.1",
+          "title": "Kriteria 1.1 — Contoh kriteria (SAMPLE, placeholder)",
+          "description": "",
+          "sort_order": 1,
+          "sections": [],
+          "indicators": [
+            {
+              "code": "1.1.1",
+              "title": "Indikator 1.1.1 — Contoh indikator (SAMPLE, placeholder)",
+              "description": "",
+              "indicator_type": "Tunggal",
+              "sort_order": 1,
+              "parameters": [
+                {
+                  "parameter_type": "parameter",
+                  "number": "1",
+                  "content": "Contoh parameter: dokumen legalitas perusahaan tersedia, berlaku, dan dapat diverifikasi.",
+                  "sort_order": 1
+                },
+                {
+                  "parameter_type": "verifier",
+                  "number": null,
+                  "content": "Contoh verifier: akta perusahaan, izin usaha, dan NIB dalam bentuk salinan.",
+                  "sort_order": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "1.2",
+          "title": "Kriteria 1.2 — Contoh kriteria kedua (SAMPLE, placeholder)",
+          "description": "",
+          "sort_order": 2,
+          "sections": [],
+          "indicators": [
+            {
+              "code": "1.2.1",
+              "title": "Indikator 1.2.1 — Contoh indikator (SAMPLE, placeholder)",
+              "description": "",
+              "indicator_type": "Ganda",
+              "sort_order": 1,
+              "parameters": [
+                {
+                  "parameter_type": "parameter",
+                  "number": "1",
+                  "content": "Contoh parameter: rencana kerja tahunan tersedia.",
+                  "sort_order": 1
+                },
+                {
+                  "parameter_type": "parameter",
+                  "number": "2",
+                  "content": "Contoh parameter: implementasi rencana kerja terdokumentasi.",
+                  "sort_order": 2
+                },
+                {
+                  "parameter_type": "verifier",
+                  "number": null,
+                  "content": "Contoh verifier: dokumen rencana kerja dan bukti pelaksanaan.",
+                  "sort_order": 3
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "2",
+      "title": "Prinsip 2 — Contoh prinsip kedua (SAMPLE, placeholder)",
+      "description": "TEMPAT SEMENTARA: konten asli belum tersedia.",
+      "sort_order": 2,
+      "sections": [
+        {
+          "code": "2.1",
+          "title": "Kriteria 2.1 — Contoh kriteria (SAMPLE, placeholder)",
+          "description": "",
+          "sort_order": 1,
+          "sections": [
+            {
+              "code": "2.1.1",
+              "title": "Sub-kriteria 2.1.1 — Contoh hierarki section (SAMPLE, placeholder)",
+              "description": "",
+              "sort_order": 1,
+              "sections": [],
+              "indicators": [
+                {
+                  "code": "2.1.1.1",
+                  "title": "Indikator 2.1.1.1 — Contoh indikator di sub-kriteria (SAMPLE, placeholder)",
+                  "description": "",
+                  "indicator_type": "Tunggal",
+                  "sort_order": 1,
+                  "parameters": [
+                    {
+                      "parameter_type": "parameter",
+                      "number": "1",
+                      "content": "Contoh parameter: struktur hierarkis section tersalin.",
+                      "sort_order": 1
+                    },
+                    {
+                      "parameter_type": "verifier",
+                      "number": null,
+                      "content": "Contoh verifier: daftar section dengan parent_id.",
+                      "sort_order": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "indicators": [
+            {
+              "code": "2.1.1",
+              "title": "Indikator 2.1.1 — Contoh indikator di kriteria (SAMPLE, placeholder)",
+              "description": "",
+              "indicator_type": "Tunggal",
+              "sort_order": 1,
+              "parameters": [
+                {
+                  "parameter_type": "parameter",
+                  "number": "1",
+                  "content": "Contoh parameter: kemitraan masyarakat terdokumentasi.",
+                  "sort_order": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

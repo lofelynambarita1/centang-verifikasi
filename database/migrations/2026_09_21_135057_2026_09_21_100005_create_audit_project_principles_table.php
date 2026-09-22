@@ -1,0 +1,33 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('audit_project_principles', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('audit_project_id')->constrained('audit_projects')->cascadeOnDelete();
+            $table->foreignId('source_template_principle_id')->nullable()->constrained('audit_template_principles')->nullOnDelete();
+            $table->string('code');
+            $table->string('title');
+            $table->text('description')->nullable();
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('audit_project_principles');
+    }
+};
