@@ -148,4 +148,12 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('can:view,evidence')
         ->scopeBindings()
         ->name('audit-projects.evidences.download');
+    Route::patch('audit-projects/{auditProject}/work/{indicator}/evidences/order', [AuditEvidenceController::class, 'reorder'])
+        ->middleware('can:update,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.evidences.order');
+    Route::patch('audit-projects/{auditProject}/work/{indicator}/evidences/{evidence}', [AuditEvidenceController::class, 'update'])
+        ->middleware('can:update,evidence')
+        ->scopeBindings()
+        ->name('audit-projects.evidences.update');
 });

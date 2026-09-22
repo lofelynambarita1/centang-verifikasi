@@ -45,7 +45,10 @@ class AuditWorkspaceController extends Controller
             'canEdit' => $user->can('update', $indicator),
             'versions' => $result?->versions->sortByDesc('version_number')->take(3) ?? collect(),
             'navigation' => $this->navigation($project, $user, $indicator),
-            'evidences' => $indicator->evidences->sortByDesc('created_at'),
+            'evidences' => $indicator->evidences->sortBy([
+                ['sort_order', 'asc'],
+                ['id', 'asc'],
+            ]),
         ]);
     }
 

@@ -11,4 +11,9 @@ class AuditIndicatorEvidencePolicy
     {
         return $user->can('view', $evidence->indicator);
     }
+
+    public function update(User $user, AuditIndicatorEvidence $evidence): bool
+    {
+        return $user->can('update', $evidence->indicator);
+    }
 }

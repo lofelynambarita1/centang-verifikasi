@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ReorderAuditEvidenceRequest;
 use App\Http\Requests\StoreAuditEvidenceRequest;
+use App\Http\Requests\UpdateAuditEvidenceMetadataRequest;
 use App\Models\AuditIndicatorEvidence;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
@@ -25,6 +27,37 @@ class AuditEvidenceController extends Controller
         $this->evidences->store($auditProject, $indicator, $request->user(), $request->file('evidence'));
 
         return back()->with('success', 'Evidence berhasil diunggah.');
+    }
+
+    public function update(
+        UpdateAuditEvidenceMetadataRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+        AuditIndicatorEvidence $evidence,
+    ): RedirectResponse {
+        abort_if($evidence->audit_project_id !== $auditProject->id, 404);
+        abort_if($evidence->audit_project_indicator_id !== $indicator->id, 404);
+
+        $this->evidences->updateMetadata(
+            $auditProject,
+            $indicator,
+            $evidence,
+            $request->user(),
+            $request->validated('caption'),
+            (bool) $request->boolean('is_report_included'),
+        );
+
+        return back()->with('success', 'Metadata evidence disimpan.');
+    }
+
+    public function reorder(
+        ReorderAuditEvidenceRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+    ): RedirectResponse {
+        $this->evidences->reorder($auditProject, $indicator, $request->user(), $request->validated('evidence_ids'));
+
+        return back()->with('success', 'Urutan evidence disimpan.');
     }
 
     public function download(

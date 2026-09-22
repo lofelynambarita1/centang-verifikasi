@@ -63,6 +63,162 @@ class AuditEvidenceTest extends TestCase
             ->assertDownload('photo.png');
     }
 
+    public function test_new_evidence_uses_incrementing_sort_order_and_false_report_flag(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+
+        foreach (['first.pdf', 'second.pdf'] as $name) {
+            $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+                'evidence' => UploadedFile::fake()->create($name, 10, 'application/pdf'),
+            ])->assertRedirect();
+        }
+
+        $this->assertSame([10, 20], AuditIndicatorEvidence::orderBy('id')->pluck('sort_order')->all());
+        $this->assertTrue(AuditIndicatorEvidence::query()->where('is_report_included', false)->count() === 2);
+    }
+
+    public function test_pic_can_update_metadata_and_identical_metadata_is_a_noop(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('report.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Draft', 0);
+        $logCount = ActivityLog::count();
+
+        $this->actingAs($pic)->patch(route('audit-projects.evidences.update', [$project, $indicator, $evidence]), [
+            'caption' => 'Bukti lapangan',
+            'is_report_included' => 1,
+        ])->assertRedirect();
+        $evidence->refresh();
+
+        $this->assertSame('Bukti lapangan', $evidence->caption);
+        $this->assertTrue($evidence->is_report_included);
+        $this->assertSame('audit_evidence.metadata_updated', ActivityLog::latest('id')->value('activity'));
+        $logCountAfterUpdate = ActivityLog::count();
+        $immutable = $evidence->only(['sha256', 'storage_disk', 'storage_path', 'original_name', 'mime_type', 'size_bytes']);
+
+        $this->actingAs($pic)->patch(route('audit-projects.evidences.update', [$project, $indicator, $evidence]), [
+            'caption' => 'Bukti lapangan',
+            'is_report_included' => 1,
+        ])->assertRedirect();
+
+        $this->assertSame($logCountAfterUpdate, ActivityLog::count());
+        $this->assertSame($immutable, $evidence->fresh()->only(array_keys($immutable)));
+        $this->assertSame($result->lock_version, $result->fresh()->lock_version);
+        $this->assertSame(1, $result->versions()->count());
+    }
+
+    public function test_caption_over_500_characters_is_rejected(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('report.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+
+        $this->actingAs($pic)
+            ->patch(route('audit-projects.evidences.update', [$project, $indicator, $evidence]), [
+                'caption' => str_repeat('x', 501),
+                'is_report_included' => 0,
+            ])
+            ->assertSessionHasErrors('caption');
+    }
+
+    public function test_pic_can_reorder_all_indicator_evidence_to_normalized_positions(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        foreach (['first.pdf', 'second.pdf', 'third.pdf'] as $name) {
+            $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+                'evidence' => UploadedFile::fake()->create($name, 10, 'application/pdf'),
+            ])->assertRedirect();
+        }
+        $ids = AuditIndicatorEvidence::orderBy('id')->pluck('id')->all();
+
+        $this->actingAs($pic)->patch(route('audit-projects.evidences.order', [$project, $indicator]), [
+            'evidence_ids' => [$ids[2], $ids[0], $ids[1]],
+        ])->assertRedirect();
+
+        $this->assertSame(
+            [[$ids[2], 10], [$ids[0], 20], [$ids[1], 30]],
+            AuditIndicatorEvidence::orderBy('sort_order')->get(['id', 'sort_order'])->map(fn (AuditIndicatorEvidence $evidence): array => [$evidence->id, $evidence->sort_order])->all(),
+        );
+        $this->assertSame('audit_evidence.reordered', ActivityLog::latest('id')->value('activity'));
+    }
+
+    public function test_reorder_rejects_evidence_from_another_indicator_with_not_found(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        $otherIndicator = $project->snapshotIndicators()->create([
+            'audit_project_id' => $project->id,
+            'audit_project_section_id' => $indicator->audit_project_section_id,
+            'code' => '1.1.2',
+            'title' => 'Other indicator',
+            'sort_order' => 2,
+        ]);
+        $project->update(['status' => AuditProjectStatus::Assignment->value]);
+        app(AssignmentService::class)->assign($project, $otherIndicator, $pic, $pic);
+        $project->update(['status' => AuditProjectStatus::InProgress->value]);
+        Storage::fake('audit_evidence');
+        foreach ([$indicator, $otherIndicator] as $currentIndicator) {
+            $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $currentIndicator]), [
+                'evidence' => UploadedFile::fake()->create('report.pdf', 10, 'application/pdf'),
+            ])->assertRedirect();
+        }
+        $foreignEvidence = $otherIndicator->evidences()->firstOrFail();
+
+        $this->actingAs($pic)
+            ->patch(route('audit-projects.evidences.order', [$project, $indicator]), [
+                'evidence_ids' => [$foreignEvidence->id],
+            ])
+            ->assertNotFound();
+    }
+
+    public function test_lead_and_admin_view_metadata_read_only_while_non_pic_cannot_mutate_it(): void
+    {
+        [$project, $indicator, $pic, $admin, $lead, $auditor] = $this->context(true);
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('report.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+        $payload = ['caption' => 'Read only check', 'is_report_included' => 1];
+
+        foreach ([$lead, $admin, $auditor] as $user) {
+            $this->actingAs($user)
+                ->patch(route('audit-projects.evidences.update', [$project, $indicator, $evidence]), $payload)
+                ->assertForbidden();
+        }
+
+        $this->actingAs($lead)->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('Tampilkan di Laporan: Tidak')
+            ->assertDontSee('Simpan Metadata');
+    }
+
+    public function test_metadata_mutation_is_forbidden_when_project_is_not_in_progress(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('report.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+        $project->update(['status' => AuditProjectStatus::Assignment->value]);
+
+        $this->actingAs($pic)
+            ->patch(route('audit-projects.evidences.update', [$project, $indicator, $evidence]), [
+                'caption' => 'Blocked',
+                'is_report_included' => 1,
+            ])
+            ->assertForbidden();
+    }
+
     public function test_invalid_and_oversized_evidence_are_rejected(): void
     {
         [$project, $indicator, $pic] = $this->context();

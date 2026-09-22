@@ -20,11 +20,18 @@ class AuditIndicatorEvidence extends Model
         'storage_disk',
         'storage_path',
         'uploaded_by',
+        'caption',
+        'sort_order',
+        'is_report_included',
     ];
 
     protected function casts(): array
     {
-        return ['size_bytes' => 'integer'];
+        return [
+            'size_bytes' => 'integer',
+            'sort_order' => 'integer',
+            'is_report_included' => 'boolean',
+        ];
     }
 
     public function project(): BelongsTo

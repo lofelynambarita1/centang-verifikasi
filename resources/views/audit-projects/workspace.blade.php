@@ -117,12 +117,62 @@
                     <tbody>
                     @foreach ($evidences as $evidence)
                         <tr>
-                            <td>{{ $evidence->original_name }}</td>
+                            <td>
+                                <strong>{{ $evidence->original_name }}</strong>
+                                @if ($evidence->caption)
+                                    <span class="cell-meta">{{ $evidence->caption }}</span>
+                                @endif
+                            </td>
                             <td>{{ $evidence->mime_type }}</td>
                             <td>{{ number_format($evidence->size_bytes / 1024, 1) }} KB</td>
                             <td>{{ $evidence->uploader?->name ?? 'Akun terhapus' }}</td>
                             <td>{{ $evidence->created_at->format('d M Y H:i') }}</td>
                             <td style="text-align: right;">
+                                @if ($canEdit)
+                                    <form method="POST" action="{{ route('audit-projects.evidences.update', [$project, $indicator, $evidence]) }}" style="display: inline-flex; gap: 8px; align-items: center;">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input class="input" type="text" name="caption" value="{{ $evidence->caption }}" maxlength="500" placeholder="Caption">
+                                        <label>
+                                            <input type="hidden" name="is_report_included" value="0">
+                                            <input type="checkbox" name="is_report_included" value="1" @checked($evidence->is_report_included)>
+                                            Tampilkan di Laporan
+                                        </label>
+                                        <button class="btn btn--ghost btn--sm" type="submit">Simpan Metadata</button>
+                                    </form>
+                                    @php
+                                        $orderedIds = $evidences->pluck('id')->values()->all();
+                                        $currentIndex = $loop->index;
+                                        $upIds = $orderedIds;
+                                        $downIds = $orderedIds;
+                                        if ($currentIndex > 0) {
+                                            [$upIds[$currentIndex - 1], $upIds[$currentIndex]] = [$upIds[$currentIndex], $upIds[$currentIndex - 1]];
+                                        }
+                                        if ($currentIndex < count($downIds) - 1) {
+                                            [$downIds[$currentIndex], $downIds[$currentIndex + 1]] = [$downIds[$currentIndex + 1], $downIds[$currentIndex]];
+                                        }
+                                        $isFirstEvidence = $loop->first;
+                                        $isLastEvidence = $loop->last;
+                                    @endphp
+                                    <form method="POST" action="{{ route('audit-projects.evidences.order', [$project, $indicator]) }}" style="display: inline-flex; gap: 4px;">
+                                        @csrf
+                                        @method('PATCH')
+                                        @foreach ($upIds as $orderedId)
+                                            <input type="hidden" name="evidence_ids[]" value="{{ $orderedId }}">
+                                        @endforeach
+                                        <button class="btn btn--ghost btn--sm" type="submit" @disabled($isFirstEvidence)>Naik</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('audit-projects.evidences.order', [$project, $indicator]) }}" style="display: inline-flex; gap: 4px;">
+                                        @csrf
+                                        @method('PATCH')
+                                        @foreach ($downIds as $orderedId)
+                                            <input type="hidden" name="evidence_ids[]" value="{{ $orderedId }}">
+                                        @endforeach
+                                        <button class="btn btn--ghost btn--sm" type="submit" @disabled($isLastEvidence)>Turun</button>
+                                    </form>
+                                @else
+                                    <span class="cell-meta">Tampilkan di Laporan: {{ $evidence->is_report_included ? 'Ya' : 'Tidak' }}</span>
+                                @endif
                                 <a class="btn btn--ghost btn--sm" href="{{ route('audit-projects.evidences.download', [$project, $indicator, $evidence]) }}">Download</a>
                             </td>
                         </tr>
