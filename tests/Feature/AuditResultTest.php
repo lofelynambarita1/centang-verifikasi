@@ -789,6 +789,162 @@ class AuditResultTest extends TestCase
         $this->assertSame($versionCount, $after->versions()->count());
     }
 
+    public function test_pic_can_autosave_and_receives_current_lock_version(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+
+        $response = $this->actingAs($auditor)->putJson(
+            route('audit-projects.work.autosave', [$project, $indicator]),
+            [
+                'result_text' => 'Autosave pertama.',
+                'assessment_status' => AuditAssessmentStatus::Memenuhi->value,
+                'lock_version' => 0,
+            ],
+        );
+
+        $response->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'lock_version' => 1,
+            ])
+            ->assertJsonStructure(['ok', 'lock_version', 'saved_at']);
+        $this->assertDatabaseHas('audit_indicator_results', [
+            'audit_project_indicator_id' => $indicator->id,
+            'result_text' => 'Autosave pertama.',
+            'assessment_status' => AuditAssessmentStatus::Memenuhi->value,
+        ]);
+    }
+
+    public function test_identical_autosave_is_a_no_op(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $service = app(AuditResultService::class);
+        $service->saveDraft($project, $indicator, $auditor, 'Autosave sama.', 0, AuditAssessmentStatus::Na);
+        $versions = $project->resultVersions()->count();
+        $logs = ActivityLog::where('audit_project_id', $project->id)->count();
+
+        $this->actingAs($auditor)->putJson(
+            route('audit-projects.work.autosave', [$project, $indicator]),
+            [
+                'result_text' => 'Autosave sama.',
+                'assessment_status' => AuditAssessmentStatus::Na->value,
+                'lock_version' => 1,
+            ],
+        )->assertOk()->assertJson(['ok' => true, 'noop' => true, 'lock_version' => 1]);
+
+        $this->assertSame($versions, $project->resultVersions()->count());
+        $this->assertSame($logs, ActivityLog::where('audit_project_id', $project->id)->count());
+    }
+
+    public function test_stale_autosave_returns_conflict_without_mutating_data(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $service = app(AuditResultService::class);
+        $service->saveDraft($project, $indicator, $auditor, 'Autosave awal.', 0, AuditAssessmentStatus::Memenuhi);
+        $service->saveDraft($project, $indicator, $auditor, 'Autosave terbaru.', 1, AuditAssessmentStatus::TidakMemenuhi);
+        $before = $indicator->fresh()->result;
+        $versions = $before->versions()->count();
+        $logs = ActivityLog::where('audit_project_id', $project->id)->count();
+
+        $this->actingAs($auditor)->putJson(
+            route('audit-projects.work.autosave', [$project, $indicator]),
+            [
+                'result_text' => 'Autosave stale.',
+                'assessment_status' => AuditAssessmentStatus::Na->value,
+                'lock_version' => 1,
+            ],
+        )->assertStatus(409)
+            ->assertJson([
+                'conflict' => true,
+                'message' => 'Hasil Audit telah berubah sejak halaman ini dibuka. Muat ulang halaman sebelum menyimpan kembali.',
+            ]);
+
+        $after = $indicator->fresh()->result;
+        $this->assertSame('Autosave terbaru.', $after->result_text);
+        $this->assertSame(AuditAssessmentStatus::TidakMemenuhi, $after->assessment_status);
+        $this->assertSame($versions, $after->versions()->count());
+        $this->assertSame($logs, ActivityLog::where('audit_project_id', $project->id)->count());
+    }
+
+    public function test_autosave_validation_and_authorization_failures_use_expected_statuses(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $lead = $project->leadMember->user;
+        $admin = User::factory()->admin()->create();
+        $payload = [
+            'result_text' => 'Autosave invalid.',
+            'assessment_status' => 'invalid',
+            'lock_version' => 0,
+        ];
+
+        $this->actingAs($auditor)->putJson(route('audit-projects.work.autosave', [$project, $indicator]), $payload)
+            ->assertStatus(422)->assertJsonValidationErrors('assessment_status');
+
+        $this->actingAs($auditor)->putJson(route('audit-projects.work.autosave', [$project, $indicator]), [
+            'result_text' => 'Autosave tanpa lock.',
+            'assessment_status' => null,
+        ])->assertStatus(422)->assertJsonValidationErrors('lock_version');
+
+        $this->actingAs($lead)->putJson(route('audit-projects.work.autosave', [$project, $indicator]), $payload)
+            ->assertForbidden();
+        $this->actingAs($admin)->putJson(route('audit-projects.work.autosave', [$project, $indicator]), $payload)
+            ->assertForbidden();
+    }
+
+    public function test_autosave_rejects_non_pic_and_projects_not_in_progress(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $other = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor, $other]);
+        $indicator = $project->snapshotIndicators()->where('code', '1.1.2')->firstOrFail();
+        app(AssignmentService::class)->assign($project, $indicator, $auditor, $admin);
+
+        $payload = [
+            'result_text' => 'Tidak boleh.',
+            'assessment_status' => AuditAssessmentStatus::Memenuhi->value,
+            'lock_version' => 0,
+        ];
+        $this->actingAs($other)->putJson(route('audit-projects.work.autosave', [$project, $indicator]), $payload)
+            ->assertForbidden();
+
+        $project->update(['status' => AuditProjectStatus::Assignment->value]);
+        $this->actingAs($auditor)->putJson(route('audit-projects.work.autosave', [$project, $indicator]), $payload)
+            ->assertForbidden();
+    }
+
+    public function test_cross_project_autosave_is_not_found(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $projectA = $this->createProject($admin, $lead, [$auditor]);
+        $projectB = $this->createProject($admin, $lead, [$auditor]);
+        $indicatorB = $projectB->snapshotIndicators()->where('code', '1.1.2')->firstOrFail();
+
+        $this->actingAs($auditor)->putJson(
+            route('audit-projects.work.autosave', [$projectA, $indicatorB]),
+            [
+                'result_text' => 'Tidak boleh.',
+                'assessment_status' => AuditAssessmentStatus::Memenuhi->value,
+                'lock_version' => 0,
+            ],
+        )->assertNotFound();
+    }
+
+    public function test_editable_workspace_exposes_autosave_url_and_current_lock_version(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+
+        $this->actingAs($auditor)
+            ->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('data-autosave-url', false)
+            ->assertSee('data-lock-version', false)
+            ->assertSee(route('audit-projects.work.autosave', [$project, $indicator]), false);
+    }
+
     public function test_lead_and_admin_can_only_view_the_assessment_status(): void
     {
         $admin = User::factory()->admin()->create();

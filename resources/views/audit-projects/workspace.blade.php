@@ -96,10 +96,15 @@
         </div>
 
         @if ($canEdit)
-            <form method="POST" action="{{ route('audit-projects.work.save-draft', [$project, $indicator]) }}">
+            <form
+                method="POST"
+                action="{{ route('audit-projects.work.save-draft', [$project, $indicator]) }}"
+                data-autosave-url="{{ route('audit-projects.work.autosave', [$project, $indicator]) }}"
+                data-autosave
+            >
                 @csrf
                 @method('PUT')
-                <input type="hidden" name="lock_version" value="{{ $result?->lock_version ?? 0 }}">
+                <input type="hidden" name="lock_version" value="{{ $result?->lock_version ?? 0 }}" data-lock-version>
 
                 @error('result_text')
                     <div class="alert alert--error">{{ $message }}</div>
@@ -137,6 +142,8 @@
 
                 <div class="form-actions">
                     <button class="btn btn--primary" type="submit">Simpan Draft</button>
+                    <span class="cell-meta" data-autosave-state aria-live="polite">Belum disimpan</span>
+                    <a class="link is-hidden" href="{{ url()->current() }}" data-autosave-reload>Muat Ulang</a>
                 </div>
             </form>
         @else
@@ -212,3 +219,115 @@
         </div>
     </section>
 @endsection
+
+@push('scripts')
+    @if ($canEdit)
+        <script>
+            (function () {
+                var form = document.querySelector('[data-autosave]');
+                if (!form) return;
+
+                var textarea = form.querySelector('[name="result_text"]');
+                var statuses = form.querySelectorAll('[name="assessment_status"]');
+                var lockVersion = form.querySelector('[data-lock-version]');
+                var state = form.querySelector('[data-autosave-state]');
+                var reloadLink = form.querySelector('[data-autosave-reload]');
+                var timer = null;
+                var revision = 0;
+                var requestInFlight = false;
+                var queued = false;
+                var conflict = false;
+
+                function setState(text) {
+                    state.textContent = text;
+                }
+
+                function selectedStatus() {
+                    var selected = form.querySelector('[name="assessment_status"]:checked');
+                    return selected ? selected.value : null;
+                }
+
+                function schedule() {
+                    if (conflict) return;
+                    queued = true;
+                    setState('Belum disimpan');
+                    window.clearTimeout(timer);
+                    timer = window.setTimeout(send, 1800);
+                }
+
+                function send() {
+                    if (conflict || requestInFlight || !queued) return;
+                    queued = false;
+                    requestInFlight = true;
+                    var requestRevision = revision;
+                    setState('Menyimpan...');
+
+                    fetch(form.dataset.autosaveUrl, {
+                        method: 'PUT',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': form.querySelector('[name="_token"]').value,
+                        },
+                        body: JSON.stringify({
+                            result_text: textarea.value,
+                            assessment_status: selectedStatus(),
+                            lock_version: Number(lockVersion.value),
+                        }),
+                    }).then(function (response) {
+                        return response.json().then(function (payload) {
+                            return { response: response, payload: payload };
+                        });
+                    }).then(function (result) {
+                        lockVersion.value = result.payload.lock_version || lockVersion.value;
+
+                        if (result.response.status === 409) {
+                            conflict = true;
+                            setState('Konflik data — muat ulang');
+                            reloadLink.classList.remove('is-hidden');
+                            return;
+                        }
+
+                        if (!result.response.ok) {
+                            setState('Gagal menyimpan');
+                            return;
+                        }
+
+                        if (revision > requestRevision) {
+                            queued = true;
+                            setState('Belum disimpan');
+                            window.clearTimeout(timer);
+                            timer = window.setTimeout(send, 1800);
+                            return;
+                        }
+
+                        setState('Tersimpan ' + new Date(result.payload.saved_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        }));
+                    }).catch(function () {
+                        setState('Gagal menyimpan');
+                    }).finally(function () {
+                        requestInFlight = false;
+                        if (queued && !conflict) send();
+                    });
+                }
+
+                function changed() {
+                    revision += 1;
+                    schedule();
+                }
+
+                textarea.addEventListener('input', changed);
+                statuses.forEach(function (radio) {
+                    radio.addEventListener('change', changed);
+                });
+
+                form.addEventListener('submit', function () {
+                    window.clearTimeout(timer);
+                    queued = false;
+                });
+            })();
+        </script>
+    @endif
+@endpush

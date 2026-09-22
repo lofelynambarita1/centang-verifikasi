@@ -9,7 +9,9 @@ use App\Models\AuditProjectIndicator;
 use App\Models\User;
 use App\Services\AuditResultService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 
 class AuditWorkspaceController extends Controller
 {
@@ -65,6 +67,45 @@ class AuditWorkspaceController extends Controller
         );
 
         return back()->with('success', 'Draft Hasil Audit disimpan.');
+    }
+
+    public function autosave(SaveDraftResultRequest $request, AuditProject $auditProject, AuditProjectIndicator $indicator): JsonResponse
+    {
+        abort_if($indicator->audit_project_id !== $auditProject->id, 404);
+
+        $this->authorize('update', $indicator);
+
+        try {
+            $result = $this->results->saveDraft(
+                $auditProject,
+                $indicator,
+                $request->user(),
+                $request->string('result_text')->trim()->toString(),
+                $request->expectedLockVersion(),
+                $request->assessmentStatus(),
+            );
+        } catch (ValidationException $exception) {
+            $errors = $exception->errors();
+
+            if (array_key_exists('lock_version', $errors)) {
+                return response()->json([
+                    'conflict' => true,
+                    'message' => $errors['lock_version'][0],
+                ], 409);
+            }
+
+            return response()->json([
+                'message' => 'Autosave gagal.',
+                'errors' => $errors,
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'noop' => $result->lock_version === $request->expectedLockVersion(),
+            'lock_version' => $result->lock_version,
+            'saved_at' => now()->toISOString(),
+        ]);
     }
 
     /**

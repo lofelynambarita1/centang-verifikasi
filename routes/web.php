@@ -132,4 +132,8 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('can:update,indicator')
         ->scopeBindings()
         ->name('audit-projects.work.save-draft');
+    Route::put('audit-projects/{auditProject}/work/{indicator}/autosave', [AuditWorkspaceController::class, 'autosave'])
+        ->middleware('can:update,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.work.autosave');
 });
