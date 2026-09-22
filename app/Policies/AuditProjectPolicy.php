@@ -20,6 +20,11 @@ class AuditProjectPolicy
         return $project->members()->where('user_id', $user->id)->exists();
     }
 
+    public function viewProgress(User $user, AuditProject $project): bool
+    {
+        return $user->system_role->isAdminOrAbove() || $project->userIsLead($user);
+    }
+
     /**
      * Determine whether the user can create projects.
      */

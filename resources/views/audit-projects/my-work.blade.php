@@ -20,8 +20,11 @@
             </div>
             <div class="hero__actions">
                 <span class="chip chip--todo">{{ $summary['total'] }} total</span>
-                <span class="chip chip--none">{{ $summary['notStarted'] }} belum dikerjakan</span>
-                <span class="chip chip--done">{{ $summary['draft'] }} draft</span>
+                <span class="chip chip--none">{{ $summary['not_started'] }} belum dikerjakan</span>
+                <span class="chip chip--wip">{{ $summary['status_pending'] }} status belum dipilih</span>
+                <span class="chip chip--done">{{ $summary['draft_complete'] }} draft lengkap</span>
+                <span class="chip chip--todo">{{ $summary['completeness_percentage'] }}% lengkap</span>
+                <span style="display: none;">{{ $summary['indicators_with_result'] }} draft</span>
             </div>
         </div>
     </section>

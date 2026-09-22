@@ -9,13 +9,17 @@ use App\Models\AuditProject;
 use App\Models\AuditTemplate;
 use App\Models\Company;
 use App\Models\User;
+use App\Services\AuditProgressService;
 use App\Services\AuditProjectService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
 class AuditProjectController extends Controller
 {
-    public function __construct(private readonly AuditProjectService $projects) {}
+    public function __construct(
+        private readonly AuditProjectService $projects,
+        private readonly AuditProgressService $progress,
+    ) {}
 
     /**
      * Display a listing of the resource.
@@ -73,6 +77,21 @@ class AuditProjectController extends Controller
         ]);
 
         return view('audit-projects.show', ['project' => $auditProject]);
+    }
+
+    public function progress(AuditProject $auditProject): View
+    {
+        $this->authorize('viewProgress', $auditProject);
+
+        $auditProject->load('company', 'template', 'members.user', 'snapshotPrinciples');
+
+        return view('audit-projects.progress', [
+            'project' => $auditProject,
+            'summary' => $this->progress->projectSummary($auditProject),
+            'auditors' => $this->progress->auditorBreakdown($auditProject),
+            'principles' => $this->progress->principleBreakdown($auditProject),
+            'indicators' => $this->progress->indicatorDetails($auditProject),
+        ]);
     }
 
     /**

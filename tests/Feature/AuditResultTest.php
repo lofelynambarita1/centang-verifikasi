@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AuditAssessmentStatus;
+use App\Enums\AuditProgressState;
 use App\Enums\AuditProjectStatus;
 use App\Models\ActivityLog;
 use App\Models\AuditIndicatorResult;
@@ -12,6 +13,7 @@ use App\Models\AuditTemplate;
 use App\Models\Company;
 use App\Models\User;
 use App\Services\AssignmentService;
+use App\Services\AuditProgressService;
 use App\Services\AuditResultService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -966,6 +968,157 @@ class AuditResultTest extends TestCase
             ->assertOk()
             ->assertSee('Memenuhi')
             ->assertSee('Read only');
+    }
+
+    public function test_progress_service_classifies_and_summarizes_snapshot_indicators(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $service = app(AuditProgressService::class);
+        $this->assertSame(AuditProgressState::NotStarted, $service->stateFor($indicator));
+
+        app(AuditResultService::class)->saveDraft($project, $indicator, $auditor, 'Isi', 0);
+        $indicator->refresh()->load('result');
+        $this->assertSame(AuditProgressState::StatusPending, $service->stateFor($indicator));
+
+        app(AuditResultService::class)->saveDraft($project, $indicator, $auditor, 'Isi', 1, AuditAssessmentStatus::Memenuhi);
+        $indicator->refresh()->load('result');
+        $this->assertSame(AuditProgressState::DraftComplete, $service->stateFor($indicator));
+
+        $summary = $service->projectSummary($project);
+        $this->assertSame(5, $summary['total']);
+        $this->assertSame(1, $summary['draft_complete']);
+        $this->assertSame(20.0, $summary['completeness_percentage']);
+    }
+
+    public function test_progress_summary_returns_zero_percentages_for_project_without_indicators(): void
+    {
+        $project = AuditProject::factory()->create();
+
+        $summary = app(AuditProgressService::class)->projectSummary($project);
+
+        $this->assertSame(0, $summary['total']);
+        $this->assertSame(0, $summary['not_started']);
+        $this->assertSame(0, $summary['status_pending']);
+        $this->assertSame(0, $summary['draft_complete']);
+        $this->assertSame(0.0, $summary['filling_percentage']);
+        $this->assertSame(0.0, $summary['completeness_percentage']);
+    }
+
+    public function test_auditor_breakdown_uses_assignments_and_includes_lead_and_unassigned_members(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $unassigned = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor, $unassigned]);
+        $service = app(AssignmentService::class);
+        $leadIndicator = $project->snapshotIndicators()->where('code', '1.1.2')->firstOrFail();
+        $auditorIndicator = $project->snapshotIndicators()->where('code', '2.1.1')->firstOrFail();
+        $service->assign($project, $leadIndicator, $lead, $admin);
+        $service->assign($project, $auditorIndicator, $auditor, $admin);
+
+        $rows = app(AuditProgressService::class)->auditorBreakdown($project)->keyBy(fn (array $row): int => $row['user']->id);
+
+        $this->assertSame(1, $rows[$lead->id]['assigned']);
+        $this->assertSame(1, $rows[$auditor->id]['assigned']);
+        $this->assertSame(0, $rows[$unassigned->id]['assigned']);
+        $this->assertSame(1, $rows[$lead->id]['not_started']);
+        $this->assertSame(0, $rows[$auditor->id]['draft_complete']);
+    }
+
+    public function test_principle_breakdown_counts_nested_section_indicator_under_parent_principle(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $nested = $project->snapshotIndicators()->where('code', '1.1.1.1')->firstOrFail();
+        $project->assignments()->create([
+            'audit_project_indicator_id' => $nested->id,
+            'pic_user_id' => $auditor->id,
+            'assigned_by' => $project->created_by,
+            'assigned_at' => now(),
+        ]);
+        app(AuditResultService::class)->saveDraft($project, $nested, $auditor, 'Nested result.', 0, AuditAssessmentStatus::Memenuhi);
+
+        $rows = app(AuditProgressService::class)->principleBreakdown($project)->keyBy(fn (array $row): string => $row['principle']->code);
+
+        $this->assertSame(3, $rows['1']['total']);
+        $this->assertSame(1, $rows['1']['draft_complete']);
+        $this->assertSame(2, $rows['1']['not_started']);
+        $this->assertSame(2, $rows['2']['total']);
+        $this->assertSame(0, $rows['2']['draft_complete']);
+    }
+
+    public function test_lead_and_admin_can_view_read_only_progress_monitoring(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        app(AuditResultService::class)->saveDraft($project, $indicator, $auditor, 'Isi', 0, AuditAssessmentStatus::Memenuhi);
+
+        $admin = User::where('id', $project->created_by)->firstOrFail();
+        $lead = $project->leadMember->user;
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.progress', $project))
+            ->assertOk()
+            ->assertSee('Monitoring Progress')
+            ->assertSee('Draft Lengkap');
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.progress', $project))
+            ->assertOk();
+
+        $this->actingAs($auditor)
+            ->get(route('audit-projects.progress', $project))
+            ->assertForbidden();
+    }
+
+    public function test_outsider_cannot_view_progress_monitoring(): void
+    {
+        [$project] = $this->assessmentContext();
+        $outsider = User::factory()->auditor()->create();
+
+        $this->actingAs($outsider)
+            ->get(route('audit-projects.progress', $project))
+            ->assertForbidden();
+    }
+
+    public function test_lead_and_admin_open_monitoring_indicators_in_existing_read_only_workspace(): void
+    {
+        [$project, $indicator, $auditor] = $this->assessmentContext();
+        $admin = User::where('id', $project->created_by)->firstOrFail();
+        $lead = $project->leadMember->user;
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('Read only');
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('Read only');
+    }
+
+    public function test_my_work_summary_only_counts_current_users_assignments(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $otherAuditor = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor, $otherAuditor]);
+        $service = app(AssignmentService::class);
+        $mine = $project->snapshotIndicators()->where('code', '1.1.2')->firstOrFail();
+        $other = $project->snapshotIndicators()->where('code', '2.1.1')->firstOrFail();
+        $service->assign($project, $mine, $auditor, $admin);
+        $service->assign($project, $other, $otherAuditor, $admin);
+        $this->inProgress($project);
+        app(AuditResultService::class)->saveDraft($project, $mine, $auditor, 'Hasil saya.', 0, AuditAssessmentStatus::Memenuhi);
+
+        $this->actingAs($auditor)
+            ->get(route('audit-projects.my-work', $project))
+            ->assertOk()
+            ->assertSee('1 total')
+            ->assertSee('0 belum dikerjakan')
+            ->assertSee('1 draft lengkap')
+            ->assertDontSee('Indikator 4');
     }
 
     private function assessmentContext(): array

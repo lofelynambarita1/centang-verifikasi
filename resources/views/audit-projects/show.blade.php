@@ -27,6 +27,9 @@
     <a class="btn btn--ghost" href="{{ route('audit-projects.index') }}">← Daftar</a>
     <a class="btn btn--ghost" href="{{ route('audit-projects.structure', $project) }}">Struktur Audit</a>
     <a class="btn btn--ghost" href="{{ route('audit-projects.my-work', $project) }}">Pekerjaan Saya</a>
+    @can('viewProgress', $project)
+        <a class="btn btn--ghost" href="{{ route('audit-projects.progress', $project) }}">Monitoring Progress</a>
+    @endcan
     <a class="btn btn--ghost" href="{{ route('audit-projects.assignments', $project) }}">Pembagian Auditor</a>
     @can('manage-audit-projects')
         <a class="btn btn--primary" href="{{ route('audit-projects.edit', $project) }}">Edit project</a>

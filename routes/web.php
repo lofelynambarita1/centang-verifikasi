@@ -63,6 +63,9 @@ Route::middleware('auth')->group(function (): void {
         ->name('audit-projects.members.destroy');
 
     Route::resource('audit-projects', AuditProjectController::class)->only(['index', 'show']);
+    Route::get('audit-projects/{auditProject}/progress', [AuditProjectController::class, 'progress'])
+        ->middleware('can:viewProgress,auditProject')
+        ->name('audit-projects.progress');
 
     /** Master templates. */
     Route::get('templates', [AuditTemplateController::class, 'index'])->name('templates.index');

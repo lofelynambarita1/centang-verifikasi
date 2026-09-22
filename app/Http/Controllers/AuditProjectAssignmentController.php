@@ -10,6 +10,7 @@ use App\Models\AuditProjectIndicator;
 use App\Models\AuditProjectSection;
 use App\Models\User;
 use App\Services\AssignmentService;
+use App\Services\AuditProgressService;
 use App\Support\StructureTree;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +20,7 @@ class AuditProjectAssignmentController extends Controller
     public function __construct(
         private readonly AssignmentService $assignments,
         private readonly StructureTree $tree,
+        private readonly AuditProgressService $progress,
     ) {}
 
     /**
@@ -111,16 +113,10 @@ class AuditProjectAssignmentController extends Controller
             ->orderBy('id')
             ->get();
 
-        $draft = $indicators->filter(fn ($indicator) => $indicator->result !== null)->count();
-
         return view('audit-projects.my-work', [
             'project' => $auditProject->load('template', 'company'),
             'indicators' => $indicators,
-            'summary' => [
-                'total' => $indicators->count(),
-                'draft' => $draft,
-                'notStarted' => $indicators->count() - $draft,
-            ],
+            'summary' => $this->progress->userSummary($auditProject, auth()->user()),
         ]);
     }
 
