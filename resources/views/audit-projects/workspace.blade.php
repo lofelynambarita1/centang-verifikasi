@@ -209,6 +209,12 @@
                 <p>
                     @if ($canEdit)
                         Tulis temuan audit dalam bentuk teks biasa. Setiap penyimpanan membuat versi baru.
+                    @elseif ($result?->workflow_status?->value === 'submitted')
+                        <span class="chip chip--done">SUBMITTED / MENUNGGU REVIEW</span>
+                        <span class="cell-meta">
+                            {{ $result->submitted_at?->format('d M Y H:i') }} ·
+                            {{ $result->submitter?->name ?? 'Akun terhapus' }}
+                        </span>
                     @elseif ($result)
                         Draft tersimpan. Anda hanya dapat melihat karena bukan PIC indikator ini (read only).
                     @else
@@ -269,6 +275,13 @@
                     <a class="link is-hidden" href="{{ url()->current() }}" data-autosave-reload>Muat Ulang</a>
                 </div>
             </form>
+            @if ($canSubmit)
+                <form method="POST" action="{{ route('audit-projects.work.submit', [$project, $indicator]) }}" style="margin-top: 14px;">
+                    @csrf
+                    <input type="hidden" name="lock_version" value="{{ $result->lock_version }}">
+                    <button class="btn btn--primary" type="submit" onclick="return confirm('Kirim Hasil Audit untuk review? Setelah dikirim, draft dan evidence tidak dapat diubah.')">Kirim untuk Review</button>
+                </form>
+            @endif
         @else
             <div class="result-text">
                 {{ $result?->result_text ?? 'BELUM DIKERJAKAN' }}

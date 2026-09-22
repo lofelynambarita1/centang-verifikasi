@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\AuditAssessmentStatus;
 use App\Enums\AuditProjectStatus;
+use App\Enums\AuditResultWorkflowStatus;
 use App\Models\AuditIndicatorResult;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
@@ -68,6 +69,12 @@ class AuditResultService
                 $this->throwLockConflict();
             }
 
+            if ($result->workflow_status !== AuditResultWorkflowStatus::Draft) {
+                throw ValidationException::withMessages([
+                    'workflow_status' => 'Hasil Audit yang telah dikirim tidak dapat diubah.',
+                ]);
+            }
+
             if ($result->result_text === $resultText && $result->assessment_status === $assessmentStatus) {
                 return $result;
             }
@@ -85,6 +92,7 @@ class AuditResultService
             'created_by' => $actor->id,
             'updated_by' => $actor->id,
             'lock_version' => 1,
+            'workflow_status' => AuditResultWorkflowStatus::Draft,
         ]);
 
         $this->recordVersion($result, 1, $resultText, $assessmentStatus, $actor, $project, $indicator);

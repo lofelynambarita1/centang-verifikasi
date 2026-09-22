@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AuditAssessmentStatus;
 use App\Enums\AuditProgressState;
 use App\Enums\AuditProjectStatus;
+use App\Enums\AuditResultWorkflowStatus;
 use App\Models\ActivityLog;
 use App\Models\AuditIndicatorResult;
 use App\Models\AuditProject;
@@ -1119,6 +1120,117 @@ class AuditResultTest extends TestCase
             ->assertSee('0 belum dikerjakan')
             ->assertSee('1 draft lengkap')
             ->assertDontSee('Indikator 4');
+    }
+
+    public function test_new_result_defaults_to_draft_and_pic_can_submit_without_new_version_or_lock_bump(): void
+    {
+        [$project, $indicator, $pic] = $this->assessmentContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Draft lengkap.', 0, AuditAssessmentStatus::Memenuhi);
+
+        $this->assertSame(AuditResultWorkflowStatus::Draft, $result->workflow_status);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), [
+            'lock_version' => $result->lock_version,
+        ])->assertRedirect();
+        $result->refresh();
+
+        $this->assertSame(AuditResultWorkflowStatus::Submitted, $result->workflow_status);
+        $this->assertNotNull($result->submitted_at);
+        $this->assertSame($pic->id, $result->submitted_by);
+        $this->assertSame(1, $result->versions()->count());
+        $this->assertSame(1, $result->lock_version);
+        $this->assertSame(1, ActivityLog::where('activity', 'audit_result.submitted')->count());
+    }
+
+    public function test_submit_requires_non_empty_result_and_assessment_status(): void
+    {
+        [$project, $indicator, $pic] = $this->assessmentContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Draft.', 0);
+
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), [
+            'lock_version' => $result->lock_version,
+        ])->assertSessionHasErrors('assessment_status');
+        $this->assertSame(AuditResultWorkflowStatus::Draft, $result->fresh()->workflow_status);
+
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 1, AuditAssessmentStatus::Na);
+        $this->assertSame('Lengkap.', $result->result_text);
+    }
+
+    public function test_submit_is_restricted_to_pic_in_progress_and_scoped_indicator(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $pic = User::factory()->auditor()->create();
+        $other = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$pic, $other]);
+        $indicator = $project->snapshotIndicators()->firstOrFail();
+        $this->assignAsPic($project, $indicator, $pic, $admin);
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 0, AuditAssessmentStatus::Na);
+
+        foreach ([$other, $lead, $admin] as $user) {
+            $this->actingAs($user)->post(route('audit-projects.work.submit', [$project, $indicator]), [
+                'lock_version' => $result->lock_version,
+            ])->assertForbidden();
+        }
+
+        $project->update(['status' => AuditProjectStatus::Assignment->value]);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), [
+            'lock_version' => $result->lock_version,
+        ])->assertForbidden();
+
+        [$otherProject, $otherIndicator, $otherPic] = $this->assessmentContext();
+        $otherResult = app(AuditResultService::class)->saveDraft($otherProject, $otherIndicator, $otherPic, 'Other.', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($admin)->post(route('audit-projects.work.submit', [$project, $otherIndicator]), [
+            'lock_version' => $otherResult->lock_version,
+        ])->assertNotFound();
+    }
+
+    public function test_stale_and_double_submit_are_rejected_without_changes_or_second_activity(): void
+    {
+        [$project, $indicator, $pic] = $this->assessmentContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 0])
+            ->assertSessionHasErrors('lock_version');
+        $this->assertSame(AuditResultWorkflowStatus::Draft, $result->fresh()->workflow_status);
+
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])
+            ->assertRedirect();
+        $activityCount = ActivityLog::where('activity', 'audit_result.submitted')->count();
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])
+            ->assertForbidden();
+        $this->assertSame($activityCount, ActivityLog::where('activity', 'audit_result.submitted')->count());
+    }
+
+    public function test_submitted_result_rejects_manual_save_and_autosave_and_workspace_is_read_only(): void
+    {
+        [$project, $indicator, $pic] = $this->assessmentContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])
+            ->assertRedirect();
+
+        $payload = ['result_text' => 'Mutated', 'assessment_status' => AuditAssessmentStatus::Memenuhi->value, 'lock_version' => 1];
+        $this->actingAs($pic)->put(route('audit-projects.work.save-draft', [$project, $indicator]), $payload)->assertForbidden();
+        $this->actingAs($pic)->put(route('audit-projects.work.autosave', [$project, $indicator]), $payload)->assertForbidden();
+        $this->actingAs($pic)->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('SUBMITTED / MENUNGGU REVIEW')
+            ->assertDontSee('data-autosave')
+            ->assertDontSee('Kirim untuk Review');
+    }
+
+    public function test_submitted_progress_is_separate_from_draft_complete_and_my_work(): void
+    {
+        [$project, $indicator, $pic] = $this->assessmentContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])
+            ->assertRedirect();
+
+        $summary = app(AuditProgressService::class)->userSummary($project, $pic);
+        $this->assertSame(0, $summary['draft_complete']);
+        $this->assertSame(1, $summary['submitted']);
+        $this->actingAs($pic)->get(route('audit-projects.my-work', $project))
+            ->assertOk()
+            ->assertSee('submitted / menunggu review')
+            ->assertSee('SUBMITTED / MENUNGGU REVIEW');
     }
 
     private function assessmentContext(): array

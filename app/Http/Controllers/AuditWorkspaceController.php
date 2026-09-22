@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SaveDraftResultRequest;
+use App\Http\Requests\SubmitAuditResultRequest;
 use App\Models\AuditIndicatorResult;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
 use App\Models\User;
 use App\Services\AuditResultService;
+use App\Services\AuditResultWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -15,7 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class AuditWorkspaceController extends Controller
 {
-    public function __construct(private readonly AuditResultService $results) {}
+    public function __construct(
+        private readonly AuditResultService $results,
+        private readonly AuditResultWorkflowService $workflow,
+    ) {}
 
     /**
      * Open the auditor workspace for one indicator. Read-only context plus the
@@ -33,7 +38,7 @@ class AuditWorkspaceController extends Controller
 
         $result = AuditIndicatorResult::query()
             ->where('audit_project_indicator_id', $indicator->id)
-            ->with(['versions.changedBy'])
+            ->with(['versions.changedBy', 'submitter'])
             ->first();
 
         $user = auth()->user();
@@ -43,6 +48,11 @@ class AuditWorkspaceController extends Controller
             'indicator' => $indicator,
             'result' => $result,
             'canEdit' => $user->can('update', $indicator),
+            'canSubmit' => $result !== null
+                && $result->workflow_status?->value === 'draft'
+                && $result->assessment_status !== null
+                && trim((string) $result->result_text) !== ''
+                && $user->can('update', $indicator),
             'versions' => $result?->versions->sortByDesc('version_number')->take(3) ?? collect(),
             'navigation' => $this->navigation($project, $user, $indicator),
             'evidences' => $indicator->activeEvidences->sortBy([
@@ -110,6 +120,23 @@ class AuditWorkspaceController extends Controller
             'lock_version' => $result->lock_version,
             'saved_at' => now()->toISOString(),
         ]);
+    }
+
+    public function submit(
+        SubmitAuditResultRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+    ): RedirectResponse {
+        abort_if($indicator->audit_project_id !== $auditProject->id, 404);
+
+        $this->workflow->submit(
+            $auditProject,
+            $indicator,
+            $request->user(),
+            $request->expectedLockVersion(),
+        );
+
+        return back()->with('success', 'Hasil Audit dikirim untuk review.');
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\AuditProgressState;
+use App\Enums\AuditResultWorkflowStatus;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
 use App\Models\User;
@@ -16,6 +17,7 @@ class AuditProgressService
      *     not_started: int,
      *     status_pending: int,
      *     draft_complete: int,
+     *     submitted: int,
      *     indicators_with_result: int,
      *     filling_percentage: float,
      *     completeness_percentage: float
@@ -33,6 +35,7 @@ class AuditProgressService
      *     not_started: int,
      *     status_pending: int,
      *     draft_complete: int,
+     *     submitted: int,
      *     completeness_percentage: float
      * }>
      */
@@ -66,6 +69,7 @@ class AuditProgressService
      *     not_started: int,
      *     status_pending: int,
      *     draft_complete: int,
+     *     submitted: int,
      *     completeness_percentage: float
      * }>
      */
@@ -108,6 +112,7 @@ class AuditProgressService
      *     not_started: int,
      *     status_pending: int,
      *     draft_complete: int,
+     *     submitted: int,
      *     indicators_with_result: int,
      *     filling_percentage: float,
      *     completeness_percentage: float
@@ -126,6 +131,10 @@ class AuditProgressService
     {
         if ($indicator->result === null) {
             return AuditProgressState::NotStarted;
+        }
+
+        if ($indicator->result->workflow_status === AuditResultWorkflowStatus::Submitted) {
+            return AuditProgressState::Submitted;
         }
 
         return $indicator->result->assessment_status === null
@@ -152,6 +161,7 @@ class AuditProgressService
         $notStarted = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::NotStarted)->count();
         $statusPending = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::StatusPending)->count();
         $draftComplete = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::DraftComplete)->count();
+        $submitted = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::Submitted)->count();
         $withResult = $total - $notStarted;
 
         return [
@@ -159,6 +169,7 @@ class AuditProgressService
             'not_started' => $notStarted,
             'status_pending' => $statusPending,
             'draft_complete' => $draftComplete,
+            'submitted' => $submitted,
             'indicators_with_result' => $withResult,
             'filling_percentage' => $this->percentage($withResult, $total),
             'completeness_percentage' => $this->percentage($draftComplete, $total),

@@ -23,6 +23,7 @@
                 <span class="chip chip--none">{{ $summary['not_started'] }} belum dikerjakan</span>
                 <span class="chip chip--wip">{{ $summary['status_pending'] }} status belum dipilih</span>
                 <span class="chip chip--done">{{ $summary['draft_complete'] }} draft lengkap</span>
+                <span class="chip chip--todo">{{ $summary['submitted'] }} submitted / menunggu review</span>
                 <span class="chip chip--todo">{{ $summary['completeness_percentage'] }}% lengkap</span>
                 <span style="display: none;">{{ $summary['indicators_with_result'] }} draft</span>
             </div>
@@ -66,7 +67,9 @@
                                 </span>
                             </td>
                             <td>
-                                @if ($indicator->result)
+                                @if ($indicator->result?->workflow_status?->value === 'submitted')
+                                    <span class="chip chip--todo">SUBMITTED / MENUNGGU REVIEW</span>
+                                @elseif ($indicator->result)
                                     <span class="chip chip--done">DRAFT</span>
                                 @else
                                     <span class="chip chip--none">BELUM DIKERJAKAN</span>

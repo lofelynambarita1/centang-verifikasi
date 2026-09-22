@@ -24,6 +24,7 @@
         <div class="stat-card"><span>Belum dikerjakan</span><strong>{{ $summary['not_started'] }}</strong></div>
         <div class="stat-card"><span>Status belum dipilih</span><strong>{{ $summary['status_pending'] }}</strong></div>
         <div class="stat-card"><span>Draft lengkap</span><strong>{{ $summary['draft_complete'] }}</strong></div>
+        <div class="stat-card"><span>Submitted / Menunggu Review</span><strong>{{ $summary['submitted'] }}</strong></div>
         <div class="stat-card"><span>Pengisian</span><strong>{{ $summary['filling_percentage'] }}%</strong></div>
         <div class="stat-card"><span>Kelengkapan</span><strong>{{ $summary['completeness_percentage'] }}%</strong></div>
     </section>

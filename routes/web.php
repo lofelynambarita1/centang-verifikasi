@@ -140,6 +140,10 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('can:update,indicator')
         ->scopeBindings()
         ->name('audit-projects.work.autosave');
+    Route::post('audit-projects/{auditProject}/work/{indicator}/submit', [AuditWorkspaceController::class, 'submit'])
+        ->middleware('can:update,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.work.submit');
     Route::post('audit-projects/{auditProject}/work/{indicator}/evidences', [AuditEvidenceController::class, 'store'])
         ->middleware('can:update,indicator')
         ->scopeBindings()

@@ -3,6 +3,8 @@
 namespace App\Policies;
 
 use App\Enums\AuditProjectStatus;
+use App\Enums\AuditResultWorkflowStatus;
+use App\Models\AuditIndicatorResult;
 use App\Models\AuditProjectIndicator;
 use App\Models\User;
 
@@ -44,6 +46,13 @@ class AuditProjectIndicatorPolicy
             return false;
         }
 
-        return $indicator->assignment?->pic_user_id === $user->id;
+        if ($indicator->assignment?->pic_user_id !== $user->id) {
+            return false;
+        }
+
+        return ! AuditIndicatorResult::query()
+            ->where('audit_project_indicator_id', $indicator->id)
+            ->where('workflow_status', AuditResultWorkflowStatus::Submitted->value)
+            ->exists();
     }
 }

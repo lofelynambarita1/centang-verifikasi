@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AuditAssessmentStatus;
+use App\Enums\AuditResultWorkflowStatus;
 use Database\Factories\AuditIndicatorResultFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,7 @@ class AuditIndicatorResult extends Model
 
     protected $fillable = [
         'audit_project_id', 'audit_project_indicator_id', 'result_text', 'assessment_status', 'created_by', 'updated_by', 'lock_version',
+        'workflow_status', 'submitted_at', 'submitted_by',
     ];
 
     protected function casts(): array
@@ -23,6 +25,9 @@ class AuditIndicatorResult extends Model
         return [
             'assessment_status' => AuditAssessmentStatus::class,
             'lock_version' => 'integer',
+            'workflow_status' => AuditResultWorkflowStatus::class,
+            'submitted_at' => 'datetime',
+            'submitted_by' => 'integer',
         ];
     }
 
@@ -44,6 +49,11 @@ class AuditIndicatorResult extends Model
     public function updater(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
     }
 
     /** @return HasMany<AuditIndicatorResultVersion, $this> */

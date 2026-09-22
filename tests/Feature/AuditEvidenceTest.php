@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AuditAssessmentStatus;
 use App\Enums\AuditEvidenceLifecycleStatus;
 use App\Enums\AuditProjectStatus;
 use App\Models\ActivityLog;
@@ -289,6 +290,36 @@ class AuditEvidenceTest extends TestCase
         $this->actingAs($admin)
             ->get(route('audit-projects.evidences.download', [$projectA, $indicatorA, $evidenceB]))
             ->assertNotFound();
+    }
+
+    public function test_submitted_result_locks_all_evidence_mutations_but_keeps_download_available(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('submitted.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Submitted result', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), [
+            'lock_version' => $result->lock_version,
+        ])->assertRedirect();
+
+        $this->actingAs($pic)->patch(route('audit-projects.evidences.update', [$project, $indicator, $evidence]), [
+            'caption' => 'Blocked',
+            'is_report_included' => 1,
+        ])->assertForbidden();
+        $this->actingAs($pic)->patch(route('audit-projects.evidences.order', [$project, $indicator]), [
+            'evidence_ids' => [$evidence->id],
+        ])->assertForbidden();
+        $this->actingAs($pic)->post(route('audit-projects.evidences.replace', [$project, $indicator, $evidence]), [
+            'evidence' => UploadedFile::fake()->create('replacement.pdf', 10, 'application/pdf'),
+        ])->assertForbidden();
+        $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [
+            'removal_reason' => 'Blocked',
+        ])->assertForbidden();
+        $this->actingAs($pic)->get(route('audit-projects.evidences.download', [$project, $indicator, $evidence]))
+            ->assertDownload('submitted.pdf');
     }
 
     public function test_workspace_shows_upload_only_to_pic_and_lists_evidence_for_read_only_users(): void
