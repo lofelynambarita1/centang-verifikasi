@@ -67,4 +67,28 @@ class User extends Authenticatable
     {
         return $this->hasMany(AuditIndicatorAssignment::class, 'pic_user_id');
     }
+
+    /**
+     * @return HasMany<AuditIndicatorResult, $this>
+     */
+    public function createdResults(): HasMany
+    {
+        return $this->hasMany(AuditIndicatorResult::class, 'created_by');
+    }
+
+    /**
+     * @return HasMany<AuditIndicatorResult, $this>
+     */
+    public function updatedResults(): HasMany
+    {
+        return $this->hasMany(AuditIndicatorResult::class, 'updated_by');
+    }
+
+    /**
+     * @return HasMany<AuditIndicatorResultVersion, $this>
+     */
+    public function changedResultVersions(): HasMany
+    {
+        return $this->hasMany(AuditIndicatorResultVersion::class, 'changed_by');
+    }
 }

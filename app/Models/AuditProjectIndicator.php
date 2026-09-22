@@ -43,4 +43,9 @@ class AuditProjectIndicator extends Model
     {
         return $this->hasOne(AuditIndicatorAssignment::class, 'audit_project_indicator_id');
     }
+
+    public function result(): HasOne
+    {
+        return $this->hasOne(AuditIndicatorResult::class, 'audit_project_indicator_id');
+    }
 }

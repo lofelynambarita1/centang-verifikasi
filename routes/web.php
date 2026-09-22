@@ -6,6 +6,7 @@ use App\Http\Controllers\AuditProjectController;
 use App\Http\Controllers\AuditProjectMemberController;
 use App\Http\Controllers\AuditProjectStructureController;
 use App\Http\Controllers\AuditTemplateController;
+use App\Http\Controllers\AuditWorkspaceController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\DashboardController;
@@ -121,4 +122,14 @@ Route::middleware('auth')->group(function (): void {
     Route::get('audit-projects/{auditProject}/indicators/{indicator}', [AuditProjectAssignmentController::class, 'showIndicator'])
         ->middleware('can:view,auditProject')
         ->name('audit-projects.indicators.show');
+
+    /** Auditor workspace + Hasil Audit draft (Tahap 4A). */
+    Route::get('audit-projects/{auditProject}/work/{indicator}', [AuditWorkspaceController::class, 'show'])
+        ->middleware('can:view,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.work.show');
+    Route::put('audit-projects/{auditProject}/work/{indicator}/draft', [AuditWorkspaceController::class, 'saveDraft'])
+        ->middleware('can:update,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.work.save-draft');
 });

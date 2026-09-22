@@ -106,13 +106,21 @@ class AuditProjectAssignmentController extends Controller
 
         $indicators = $auditProject->snapshotIndicators()
             ->whereHas('assignment', fn ($assignment) => $assignment->where('pic_user_id', auth()->id()))
-            ->with(['section.principle', 'assignment.pic'])
+            ->with(['section.principle', 'assignment.pic', 'result'])
             ->orderBy('sort_order')
+            ->orderBy('id')
             ->get();
+
+        $draft = $indicators->filter(fn ($indicator) => $indicator->result !== null)->count();
 
         return view('audit-projects.my-work', [
             'project' => $auditProject->load('template', 'company'),
             'indicators' => $indicators,
+            'summary' => [
+                'total' => $indicators->count(),
+                'draft' => $draft,
+                'notStarted' => $indicators->count() - $draft,
+            ],
         ]);
     }
 

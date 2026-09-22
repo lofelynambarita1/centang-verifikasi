@@ -263,6 +263,8 @@ img, svg { vertical-align: middle; }
 .chip::before { content: ''; width: 7px; height: 7px; border-radius: 50%; }
 .chip--done { background: var(--success-bg); color: var(--success); }
 .chip--done::before { background: var(--success); }
+.chip--none { background: #eef1f8; color: #6b728a; }
+.chip--none::before { background: #b6bfd9; }
 .chip--wip { background: var(--warning-bg); color: var(--warning); }
 .chip--wip::before { background: var(--warning); }
 .chip--todo { background: #eef1f8; color: #6b728a; }
@@ -875,3 +877,14 @@ img, svg { vertical-align: middle; }
 
 .structure-context { margin-bottom: 4px; }
 .structure-context span { display: block; color: var(--quiet); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+
+/* =====================================================================
+   AUDITOR WORKSPACE (Tahap 4A)
+   ===================================================================== */
+.alert--error { background: var(--danger-bg); color: var(--danger); border: 1px solid #f2c9c3; }
+.textarea { width: 100%; min-height: 120px; border: 1px solid var(--border-strong); border-radius: 10px; background: #fff; color: var(--text); padding: 12px 14px; font-size: 15px; transition: border-color .15s, box-shadow .15s; }
+.textarea--lg { font-size: 15.5px; line-height: 1.6; }
+.textarea:focus { outline: 3px solid rgba(59, 86, 201, .18); border-color: var(--primary); }
+.result-text { white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.65; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+.form-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.nav-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; }

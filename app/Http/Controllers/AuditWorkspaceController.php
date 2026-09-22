@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\SaveDraftResultRequest;
+use App\Models\AuditIndicatorResult;
+use App\Models\AuditProject;
+use App\Models\AuditProjectIndicator;
+use App\Models\User;
+use App\Services\AuditResultService;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
+
+class AuditWorkspaceController extends Controller
+{
+    public function __construct(private readonly AuditResultService $results) {}
+
+    /**
+     * Open the auditor workspace for one indicator. Read-only context plus the
+     * Hasil Audit, editable only for the active PIC while the project is
+     * in-progress.
+     */
+    public function show(AuditProject $auditProject, AuditProjectIndicator $indicator): View
+    {
+        abort_if($indicator->audit_project_id !== $auditProject->id, 404);
+
+        $this->authorize('view', $indicator);
+
+        $project = $auditProject->load('template', 'company', 'leadMember.user');
+        $indicator->load(['section.principle', 'parameters', 'assignment.pic']);
+
+        $result = AuditIndicatorResult::query()
+            ->where('audit_project_indicator_id', $indicator->id)
+            ->with(['versions.changedBy'])
+            ->first();
+
+        $user = auth()->user();
+
+        return view('audit-projects.workspace', [
+            'project' => $project,
+            'indicator' => $indicator,
+            'result' => $result,
+            'canEdit' => $user->can('update', $indicator),
+            'versions' => $result?->versions->sortByDesc('version_number')->take(3) ?? collect(),
+            'navigation' => $this->navigation($project, $user, $indicator),
+        ]);
+    }
+
+    /**
+     * Persist (create or update) the draft Hasil Audit of an indicator.
+     */
+    public function saveDraft(SaveDraftResultRequest $request, AuditProject $auditProject, AuditProjectIndicator $indicator): RedirectResponse
+    {
+        abort_if($indicator->audit_project_id !== $auditProject->id, 404);
+
+        $this->authorize('update', $indicator);
+
+        $this->results->saveDraft(
+            $auditProject,
+            $indicator,
+            $request->user(),
+            $request->string('result_text')->trim()->toString(),
+            $request->expectedLockVersion(),
+        );
+
+        return back()->with('success', 'Draft Hasil Audit disimpan.');
+    }
+
+    /**
+     * Previous/next workspace navigation restricted to the current user's own
+     * PIC indicators. Other auditors' indicators never appear here.
+     *
+     * @return array{prev?: AuditProjectIndicator, next?: AuditProjectIndicator}
+     */
+    private function navigation(AuditProject $project, User $user, AuditProjectIndicator $current): array
+    {
+        $ids = $project->snapshotIndicators()
+            ->whereHas('assignment', fn ($assignment) => $assignment->where('pic_user_id', $user->id))
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->pluck('id')
+            ->values();
+
+        $index = $ids->search($current->id);
+
+        if ($index === false) {
+            return [];
+        }
+
+        $navigation = [];
+
+        if ($index > 0) {
+            $navigation['prev'] = AuditProjectIndicator::findOrFail($ids[$index - 1]);
+        }
+
+        if ($index < $ids->count() - 1) {
+            $navigation['next'] = AuditProjectIndicator::findOrFail($ids[$index + 1]);
+        }
+
+        return $navigation;
+    }
+}

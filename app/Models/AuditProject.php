@@ -99,6 +99,12 @@ class AuditProject extends Model
         return $this->hasMany(AuditProjectIndicator::class)->orderBy('sort_order');
     }
 
+    /** @return HasMany<AuditProjectIndicator, $this> */
+    public function indicators(): HasMany
+    {
+        return $this->hasMany(AuditProjectIndicator::class, 'audit_project_id');
+    }
+
     /** @return HasMany<AuditProjectParameter, $this> */
     public function snapshotParameters(): HasMany
     {
@@ -115,6 +121,18 @@ class AuditProject extends Model
     public function assignmentHistories(): HasMany
     {
         return $this->hasMany(AuditAssignmentHistory::class, 'audit_project_id');
+    }
+
+    /** @return HasMany<AuditIndicatorResult, $this> */
+    public function results(): HasMany
+    {
+        return $this->hasMany(AuditIndicatorResult::class, 'audit_project_id');
+    }
+
+    /** @return HasMany<AuditIndicatorResultVersion, $this> */
+    public function resultVersions(): HasMany
+    {
+        return $this->hasMany(AuditIndicatorResultVersion::class, 'audit_project_id');
     }
 
     public function userIsLead(User $user): bool

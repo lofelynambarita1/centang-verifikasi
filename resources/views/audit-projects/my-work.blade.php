@@ -19,7 +19,9 @@
                 <div class="hero__sub">{{ $project->company?->name }} · Indikator yang menjadi tanggung jawab Anda</div>
             </div>
             <div class="hero__actions">
-                <span class="chip chip--done">{{ $indicators->count() }} indikator</span>
+                <span class="chip chip--todo">{{ $summary['total'] }} total</span>
+                <span class="chip chip--none">{{ $summary['notStarted'] }} belum dikerjakan</span>
+                <span class="chip chip--done">{{ $summary['draft'] }} draft</span>
             </div>
         </div>
     </section>
@@ -28,7 +30,7 @@
         <div class="panel__head">
             <div>
                 <h2>Indikator saya</h2>
-                <p>Klik indikator untuk melihat struktur persyaratan dan Parameter/Verifier (read only).</p>
+                <p>Klik indikator untuk membuka workspace dan menulis Hasil Audit.</p>
             </div>
         </div>
 
@@ -39,6 +41,7 @@
                         <tr>
                             <th>Indikator</th>
                             <th>Lokasi struktur</th>
+                            <th>Status</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -59,8 +62,15 @@
                                     {{ $indicator->section?->title ?? 'Kriteria' }}
                                 </span>
                             </td>
+                            <td>
+                                @if ($indicator->result)
+                                    <span class="chip chip--done">DRAFT</span>
+                                @else
+                                    <span class="chip chip--none">BELUM DIKERJAKAN</span>
+                                @endif
+                            </td>
                             <td style="text-align: right;">
-                                <a class="btn btn--ghost btn--sm" href="{{ route('audit-projects.indicators.show', [$project, $indicator]) }}">Lihat detail</a>
+                                <a class="btn btn--ghost btn--sm" href="{{ route('audit-projects.work.show', [$project, $indicator]) }}">Kerjakan</a>
                             </td>
                         </tr>
                     @endforeach
