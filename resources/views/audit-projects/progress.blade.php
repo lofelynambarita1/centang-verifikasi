@@ -25,6 +25,8 @@
         <div class="stat-card"><span>Status belum dipilih</span><strong>{{ $summary['status_pending'] }}</strong></div>
         <div class="stat-card"><span>Draft lengkap</span><strong>{{ $summary['draft_complete'] }}</strong></div>
         <div class="stat-card"><span>Submitted / Menunggu Review</span><strong>{{ $summary['submitted'] }}</strong></div>
+        <div class="stat-card"><span>Revision Requested</span><strong>{{ $summary['revision_requested'] }}</strong></div>
+        <div class="stat-card"><span>Approved</span><strong>{{ $summary['approved'] }}</strong></div>
         <div class="stat-card"><span>Pengisian</span><strong>{{ $summary['filling_percentage'] }}%</strong></div>
         <div class="stat-card"><span>Kelengkapan</span><strong>{{ $summary['completeness_percentage'] }}%</strong></div>
     </section>
@@ -33,7 +35,7 @@
         <div class="panel__head"><div><h2>Breakdown per auditor</h2></div></div>
         <div class="table-wrap">
             <table class="table">
-                <thead><tr><th>Auditor</th><th>Assigned</th><th>Belum Dikerjakan</th><th>Status Belum Dipilih</th><th>Draft Lengkap</th><th>Kelengkapan</th></tr></thead>
+                <thead><tr><th>Auditor</th><th>Assigned</th><th>Belum Dikerjakan</th><th>Status Belum Dipilih</th><th>Draft Lengkap</th><th>Revisi</th><th>Submitted</th><th>Approved</th><th>Kelengkapan</th></tr></thead>
                 <tbody>
                 @forelse ($auditors as $row)
                     <tr>
@@ -42,10 +44,13 @@
                         <td>{{ $row['not_started'] }}</td>
                         <td>{{ $row['status_pending'] }}</td>
                         <td>{{ $row['draft_complete'] }}</td>
+                        <td>{{ $row['revision_requested'] }}</td>
+                        <td>{{ $row['submitted'] }}</td>
+                        <td>{{ $row['approved'] }}</td>
                         <td>{{ $row['completeness_percentage'] }}%</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">Belum ada anggota project.</td></tr>
+                    <tr><td colspan="9">Belum ada anggota project.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -56,7 +61,7 @@
         <div class="panel__head"><div><h2>Breakdown per Principle</h2></div></div>
         <div class="table-wrap">
             <table class="table">
-                <thead><tr><th>Principle</th><th>Total</th><th>Belum Dikerjakan</th><th>Status Belum Dipilih</th><th>Draft Lengkap</th><th>Kelengkapan</th></tr></thead>
+                <thead><tr><th>Principle</th><th>Total</th><th>Belum Dikerjakan</th><th>Status Belum Dipilih</th><th>Draft Lengkap</th><th>Revisi</th><th>Submitted</th><th>Approved</th><th>Kelengkapan</th></tr></thead>
                 <tbody>
                 @forelse ($principles as $row)
                     <tr>
@@ -65,10 +70,13 @@
                         <td>{{ $row['not_started'] }}</td>
                         <td>{{ $row['status_pending'] }}</td>
                         <td>{{ $row['draft_complete'] }}</td>
+                        <td>{{ $row['revision_requested'] }}</td>
+                        <td>{{ $row['submitted'] }}</td>
+                        <td>{{ $row['approved'] }}</td>
                         <td>{{ $row['completeness_percentage'] }}%</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">Belum ada principle snapshot.</td></tr>
+                    <tr><td colspan="9">Belum ada principle snapshot.</td></tr>
                 @endforelse
                 </tbody>
             </table>

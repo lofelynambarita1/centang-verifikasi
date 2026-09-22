@@ -10,6 +10,7 @@ use App\Models\ActivityLog;
 use App\Models\AuditIndicatorResult;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
+use App\Models\AuditResultReviewEvent;
 use App\Models\AuditTemplate;
 use App\Models\Company;
 use App\Models\User;
@@ -1231,6 +1232,132 @@ class AuditResultTest extends TestCase
             ->assertOk()
             ->assertSee('submitted / menunggu review')
             ->assertSee('SUBMITTED / MENUNGGU REVIEW');
+    }
+
+    public function test_review_transitions_create_immutable_history_and_approve(): void
+    {
+        [$project, $indicator, $pic, $lead] = $this->reviewContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 0, AuditAssessmentStatus::Na);
+
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])->assertRedirect();
+        $this->actingAs($lead)->post(route('audit-projects.work.review.revision', [$project, $indicator]), [
+            'lock_version' => 1,
+            'note' => 'Mohon lengkapi bukti dan uraian.',
+        ])->assertRedirect();
+        $this->assertSame(AuditResultWorkflowStatus::RevisionRequested, $result->fresh()->workflow_status);
+        $this->assertSame(1, $result->fresh()->lock_version);
+
+        app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap dengan revisi.', 1, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 2])->assertRedirect();
+        $this->actingAs($lead)->post(route('audit-projects.work.review.approve', [$project, $indicator]), [
+            'lock_version' => 2,
+            'note' => 'Sudah sesuai.',
+        ])->assertRedirect();
+
+        $result->refresh();
+        $this->assertSame(AuditResultWorkflowStatus::Approved, $result->workflow_status);
+        $this->assertSame($lead->id, $result->approved_by);
+        $this->assertNotNull($result->approved_at);
+        $this->assertSame(2, $result->versions()->count());
+        $this->assertSame(2, $result->lock_version);
+        $this->assertSame(
+            ['submitted', 'revision_requested', 'submitted', 'approved'],
+            AuditResultReviewEvent::orderBy('id')->pluck('action')->map(fn ($action) => $action->value)->all(),
+        );
+    }
+
+    public function test_review_authorization_and_notes_are_enforced(): void
+    {
+        [$project, $indicator, $pic, $lead] = $this->reviewContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])->assertRedirect();
+        $admin = User::factory()->admin()->create();
+        $outsider = User::factory()->auditor()->create();
+
+        foreach ([$pic, $admin, $outsider] as $actor) {
+            $this->actingAs($actor)->post(route('audit-projects.work.review.revision', [$project, $indicator]), [
+                'lock_version' => 1,
+                'note' => 'Tidak boleh.',
+            ])->assertForbidden();
+        }
+
+        $this->actingAs($lead)->post(route('audit-projects.work.review.revision', [$project, $indicator]), [
+            'lock_version' => 1,
+            'note' => 'x',
+        ])->assertSessionHasErrors('note');
+    }
+
+    public function test_stale_review_and_invalid_transitions_create_no_event_or_activity(): void
+    {
+        [$project, $indicator, $pic, $lead] = $this->reviewContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])->assertRedirect();
+        $events = AuditResultReviewEvent::count();
+        $activities = ActivityLog::where('activity', 'audit_result.revision_requested')->count();
+
+        $this->actingAs($lead)->post(route('audit-projects.work.review.revision', [$project, $indicator]), [
+            'lock_version' => 0,
+            'note' => 'Stale decision.',
+        ])->assertSessionHasErrors('lock_version');
+        $this->assertSame($events, AuditResultReviewEvent::count());
+        $this->assertSame($activities, ActivityLog::where('activity', 'audit_result.revision_requested')->count());
+
+        $approvalEvents = AuditResultReviewEvent::count();
+        $approvalActivities = ActivityLog::where('activity', 'audit_result.approved')->count();
+        $this->actingAs($lead)->post(route('audit-projects.work.review.approve', [$project, $indicator]), [
+            'lock_version' => 0,
+        ])->assertSessionHasErrors('lock_version');
+        $this->assertSame($approvalEvents, AuditResultReviewEvent::count());
+        $this->assertSame($approvalActivities, ActivityLog::where('activity', 'audit_result.approved')->count());
+
+        $this->actingAs($lead)->post(route('audit-projects.work.review.approve', [$project, $indicator]), [
+            'lock_version' => 1,
+        ])->assertRedirect();
+        $this->actingAs($lead)->post(route('audit-projects.work.review.approve', [$project, $indicator]), [
+            'lock_version' => 1,
+        ])->assertSessionHasErrors('workflow_status');
+    }
+
+    public function test_revision_requested_unlocks_pic_and_approved_locks_result(): void
+    {
+        [$project, $indicator, $pic, $lead] = $this->reviewContext();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Lengkap.', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])->assertRedirect();
+        $this->actingAs($lead)->post(route('audit-projects.work.review.revision', [$project, $indicator]), [
+            'lock_version' => 1,
+            'note' => 'Revisi diperlukan.',
+        ])->assertRedirect();
+
+        $this->actingAs($pic)->put(route('audit-projects.work.save-draft', [$project, $indicator]), [
+            'result_text' => 'Diperbaiki.',
+            'assessment_status' => AuditAssessmentStatus::Na->value,
+            'lock_version' => 1,
+        ])->assertRedirect();
+        $this->actingAs($pic)->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('Kirim Ulang untuk Review')
+            ->assertSee('REVISI DIMINTA');
+
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 2])->assertRedirect();
+        $this->actingAs($lead)->post(route('audit-projects.work.review.approve', [$project, $indicator]), ['lock_version' => 2])->assertRedirect();
+        $this->actingAs($pic)->put(route('audit-projects.work.save-draft', [$project, $indicator]), [
+            'result_text' => 'Tidak boleh.',
+            'assessment_status' => AuditAssessmentStatus::Na->value,
+            'lock_version' => 2,
+        ])->assertForbidden();
+        $this->assertSame(AuditResultWorkflowStatus::Approved, $result->fresh()->workflow_status);
+    }
+
+    private function reviewContext(): array
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $pic = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$pic]);
+        $indicator = $project->snapshotIndicators()->where('code', '1.1.2')->firstOrFail();
+        $this->assignAsPic($project, $indicator, $pic, $admin);
+
+        return [$project, $indicator, $pic, $lead];
     }
 
     private function assessmentContext(): array

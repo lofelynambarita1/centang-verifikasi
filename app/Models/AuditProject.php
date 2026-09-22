@@ -147,6 +147,12 @@ class AuditProject extends Model
         return $this->hasMany(AuditIndicatorResultVersion::class, 'audit_project_id');
     }
 
+    /** @return HasMany<AuditResultReviewEvent, $this> */
+    public function resultReviewEvents(): HasMany
+    {
+        return $this->hasMany(AuditResultReviewEvent::class, 'audit_project_id')->latest('id');
+    }
+
     public function userIsLead(User $user): bool
     {
         return $this->members()

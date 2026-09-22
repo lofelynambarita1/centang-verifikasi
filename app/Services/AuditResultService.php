@@ -69,7 +69,10 @@ class AuditResultService
                 $this->throwLockConflict();
             }
 
-            if ($result->workflow_status !== AuditResultWorkflowStatus::Draft) {
+            if (! in_array($result->workflow_status, [
+                AuditResultWorkflowStatus::Draft,
+                AuditResultWorkflowStatus::RevisionRequested,
+            ], true)) {
                 throw ValidationException::withMessages([
                     'workflow_status' => 'Hasil Audit yang telah dikirim tidak dapat diubah.',
                 ]);

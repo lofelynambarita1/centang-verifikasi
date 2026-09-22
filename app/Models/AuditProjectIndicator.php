@@ -49,6 +49,12 @@ class AuditProjectIndicator extends Model
         return $this->hasOne(AuditIndicatorResult::class, 'audit_project_indicator_id');
     }
 
+    /** @return HasMany<AuditResultReviewEvent, $this> */
+    public function resultReviewEvents(): HasMany
+    {
+        return $this->hasMany(AuditResultReviewEvent::class, 'audit_project_indicator_id')->orderBy('id');
+    }
+
     /** @return HasMany<AuditIndicatorEvidence, $this> */
     public function evidences(): HasMany
     {

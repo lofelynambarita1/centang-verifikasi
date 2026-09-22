@@ -24,6 +24,8 @@
                 <span class="chip chip--wip">{{ $summary['status_pending'] }} status belum dipilih</span>
                 <span class="chip chip--done">{{ $summary['draft_complete'] }} draft lengkap</span>
                 <span class="chip chip--todo">{{ $summary['submitted'] }} submitted / menunggu review</span>
+                <span class="chip chip--wip">{{ $summary['revision_requested'] }} revisi diminta</span>
+                <span class="chip chip--done">{{ $summary['approved'] }} approved</span>
                 <span class="chip chip--todo">{{ $summary['completeness_percentage'] }}% lengkap</span>
                 <span style="display: none;">{{ $summary['indicators_with_result'] }} draft</span>
             </div>
@@ -69,6 +71,10 @@
                             <td>
                                 @if ($indicator->result?->workflow_status?->value === 'submitted')
                                     <span class="chip chip--todo">SUBMITTED / MENUNGGU REVIEW</span>
+                                @elseif ($indicator->result?->workflow_status?->value === 'revision_requested')
+                                    <span class="chip chip--wip">REVISI DIMINTA</span>
+                                @elseif ($indicator->result?->workflow_status?->value === 'approved')
+                                    <span class="chip chip--done">APPROVED</span>
                                 @elseif ($indicator->result)
                                     <span class="chip chip--done">DRAFT</span>
                                 @else

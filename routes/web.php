@@ -144,6 +144,14 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('can:update,indicator')
         ->scopeBindings()
         ->name('audit-projects.work.submit');
+    Route::post('audit-projects/{auditProject}/work/{indicator}/review/revision', [AuditWorkspaceController::class, 'requestRevision'])
+        ->middleware('can:review,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.work.review.revision');
+    Route::post('audit-projects/{auditProject}/work/{indicator}/review/approve', [AuditWorkspaceController::class, 'approve'])
+        ->middleware('can:review,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.work.review.approve');
     Route::post('audit-projects/{auditProject}/work/{indicator}/evidences', [AuditEvidenceController::class, 'store'])
         ->middleware('can:update,indicator')
         ->scopeBindings()

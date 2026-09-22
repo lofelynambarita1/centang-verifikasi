@@ -8,6 +8,8 @@ enum AuditProgressState: string
     case StatusPending = 'status_pending';
     case DraftComplete = 'draft_complete';
     case Submitted = 'submitted';
+    case RevisionRequested = 'revision_requested';
+    case Approved = 'approved';
 
     public function label(): string
     {
@@ -16,6 +18,8 @@ enum AuditProgressState: string
             self::StatusPending => 'Status Belum Dipilih',
             self::DraftComplete => 'Draft Lengkap',
             self::Submitted => 'Submitted / Menunggu Review',
+            self::RevisionRequested => 'Revision Requested',
+            self::Approved => 'Approved',
         };
     }
 }

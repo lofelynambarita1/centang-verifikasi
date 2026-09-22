@@ -17,7 +17,7 @@ class AuditIndicatorResult extends Model
 
     protected $fillable = [
         'audit_project_id', 'audit_project_indicator_id', 'result_text', 'assessment_status', 'created_by', 'updated_by', 'lock_version',
-        'workflow_status', 'submitted_at', 'submitted_by',
+        'workflow_status', 'submitted_at', 'submitted_by', 'approved_at', 'approved_by',
     ];
 
     protected function casts(): array
@@ -28,6 +28,8 @@ class AuditIndicatorResult extends Model
             'workflow_status' => AuditResultWorkflowStatus::class,
             'submitted_at' => 'datetime',
             'submitted_by' => 'integer',
+            'approved_at' => 'datetime',
+            'approved_by' => 'integer',
         ];
     }
 
@@ -54,6 +56,17 @@ class AuditIndicatorResult extends Model
     public function submitter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /** @return HasMany<AuditResultReviewEvent, $this> */
+    public function reviewEvents(): HasMany
+    {
+        return $this->hasMany(AuditResultReviewEvent::class, 'audit_indicator_result_id')->orderBy('id');
     }
 
     /** @return HasMany<AuditIndicatorResultVersion, $this> */

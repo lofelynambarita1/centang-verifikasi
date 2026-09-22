@@ -50,9 +50,21 @@ class AuditProjectIndicatorPolicy
             return false;
         }
 
-        return ! AuditIndicatorResult::query()
+        $result = AuditIndicatorResult::query()
+            ->where('audit_project_id', $indicator->audit_project_id)
             ->where('audit_project_indicator_id', $indicator->id)
-            ->where('workflow_status', AuditResultWorkflowStatus::Submitted->value)
-            ->exists();
+            ->first();
+
+        return $result === null || in_array(
+            $result->workflow_status,
+            [AuditResultWorkflowStatus::Draft, AuditResultWorkflowStatus::RevisionRequested],
+            true,
+        );
+    }
+
+    public function review(User $user, AuditProjectIndicator $indicator): bool
+    {
+        return $indicator->project->status === AuditProjectStatus::InProgress
+            && $indicator->project->userIsLead($user);
     }
 }

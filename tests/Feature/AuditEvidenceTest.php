@@ -322,6 +322,40 @@ class AuditEvidenceTest extends TestCase
             ->assertDownload('submitted.pdf');
     }
 
+    public function test_revision_requested_unlocks_all_evidence_mutations_for_pic(): void
+    {
+        [$project, $indicator, $pic] = $this->context();
+        $lead = $project->leadMember->user;
+        Storage::fake('audit_evidence');
+        $this->actingAs($pic)->post(route('audit-projects.evidences.store', [$project, $indicator]), [
+            'evidence' => UploadedFile::fake()->create('original.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+        $evidence = AuditIndicatorEvidence::firstOrFail();
+        $result = app(AuditResultService::class)->saveDraft($project, $indicator, $pic, 'Submitted', 0, AuditAssessmentStatus::Na);
+        $this->actingAs($pic)->post(route('audit-projects.work.submit', [$project, $indicator]), ['lock_version' => 1])->assertRedirect();
+        $this->actingAs($lead)->post(route('audit-projects.work.review.revision', [$project, $indicator]), [
+            'lock_version' => 1,
+            'note' => 'Perlu perbaikan.',
+        ])->assertRedirect();
+
+        $this->actingAs($pic)->patch(route('audit-projects.evidences.update', [$project, $indicator, $evidence]), [
+            'caption' => 'Updated',
+            'is_report_included' => 1,
+        ])->assertRedirect();
+        $this->actingAs($pic)->patch(route('audit-projects.evidences.order', [$project, $indicator]), [
+            'evidence_ids' => [$evidence->id],
+        ])->assertRedirect();
+        $this->actingAs($pic)->post(route('audit-projects.evidences.replace', [$project, $indicator, $evidence]), [
+            'evidence' => UploadedFile::fake()->create('replacement.pdf', 10, 'application/pdf'),
+        ])->assertRedirect();
+
+        $replacement = AuditIndicatorEvidence::whereKeyNot($evidence->id)->firstOrFail();
+        $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $replacement]), [
+            'removal_reason' => 'Tidak relevan setelah revisi.',
+        ])->assertRedirect();
+        $this->assertSame('revision_requested', $result->fresh()->workflow_status->value);
+    }
+
     public function test_workspace_shows_upload_only_to_pic_and_lists_evidence_for_read_only_users(): void
     {
         [$project, $indicator, $pic, $admin, $lead] = $this->context(true);

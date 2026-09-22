@@ -18,6 +18,10 @@ class AuditProgressService
      *     status_pending: int,
      *     draft_complete: int,
      *     submitted: int,
+     *     revision_requested: int,
+     *     approved: int,
+     *     revision_requested: int,
+     *     approved: int,
      *     indicators_with_result: int,
      *     filling_percentage: float,
      *     completeness_percentage: float
@@ -56,6 +60,9 @@ class AuditProgressService
                     'not_started' => $summary['not_started'],
                     'status_pending' => $summary['status_pending'],
                     'draft_complete' => $summary['draft_complete'],
+                    'submitted' => $summary['submitted'],
+                    'revision_requested' => $summary['revision_requested'],
+                    'approved' => $summary['approved'],
                     'completeness_percentage' => $summary['completeness_percentage'],
                 ];
             })
@@ -70,6 +77,8 @@ class AuditProgressService
      *     status_pending: int,
      *     draft_complete: int,
      *     submitted: int,
+     *     revision_requested: int,
+     *     approved: int,
      *     completeness_percentage: float
      * }>
      */
@@ -89,6 +98,9 @@ class AuditProgressService
                 'not_started' => $summary['not_started'],
                 'status_pending' => $summary['status_pending'],
                 'draft_complete' => $summary['draft_complete'],
+                'submitted' => $summary['submitted'],
+                'revision_requested' => $summary['revision_requested'],
+                'approved' => $summary['approved'],
                 'completeness_percentage' => $summary['completeness_percentage'],
             ];
         });
@@ -113,6 +125,8 @@ class AuditProgressService
      *     status_pending: int,
      *     draft_complete: int,
      *     submitted: int,
+     *     revision_requested: int,
+     *     approved: int,
      *     indicators_with_result: int,
      *     filling_percentage: float,
      *     completeness_percentage: float
@@ -135,6 +149,14 @@ class AuditProgressService
 
         if ($indicator->result->workflow_status === AuditResultWorkflowStatus::Submitted) {
             return AuditProgressState::Submitted;
+        }
+
+        if ($indicator->result->workflow_status === AuditResultWorkflowStatus::RevisionRequested) {
+            return AuditProgressState::RevisionRequested;
+        }
+
+        if ($indicator->result->workflow_status === AuditResultWorkflowStatus::Approved) {
+            return AuditProgressState::Approved;
         }
 
         return $indicator->result->assessment_status === null
@@ -162,6 +184,8 @@ class AuditProgressService
         $statusPending = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::StatusPending)->count();
         $draftComplete = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::DraftComplete)->count();
         $submitted = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::Submitted)->count();
+        $revisionRequested = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::RevisionRequested)->count();
+        $approved = $states->filter(fn (AuditProgressState $state): bool => $state === AuditProgressState::Approved)->count();
         $withResult = $total - $notStarted;
 
         return [
@@ -170,6 +194,8 @@ class AuditProgressService
             'status_pending' => $statusPending,
             'draft_complete' => $draftComplete,
             'submitted' => $submitted,
+            'revision_requested' => $revisionRequested,
+            'approved' => $approved,
             'indicators_with_result' => $withResult,
             'filling_percentage' => $this->percentage($withResult, $total),
             'completeness_percentage' => $this->percentage($draftComplete, $total),

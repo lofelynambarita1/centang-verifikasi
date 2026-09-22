@@ -42,6 +42,29 @@
         </div>
     </section>
 
+    @if ($canReview && $result?->workflow_status?->value === 'submitted')
+        <section class="panel panel--pad">
+            <div class="panel__head">
+                <div>
+                    <h2>Review Lead Auditor</h2>
+                    <p>Hasil Audit dan evidence bersifat read-only selama proses review.</p>
+                </div>
+            </div>
+            <form method="POST" action="{{ route('audit-projects.work.review.revision', [$project, $indicator]) }}" style="margin-bottom: 12px;">
+                @csrf
+                <input type="hidden" name="lock_version" value="{{ $result->lock_version }}">
+                <textarea class="textarea" name="note" rows="4" minlength="3" maxlength="2000" required placeholder="Catatan revisi"></textarea>
+                <button class="btn btn--ghost" type="submit">Minta Revisi</button>
+            </form>
+            <form method="POST" action="{{ route('audit-projects.work.review.approve', [$project, $indicator]) }}">
+                @csrf
+                <input type="hidden" name="lock_version" value="{{ $result->lock_version }}">
+                <textarea class="textarea" name="note" rows="3" maxlength="2000" placeholder="Catatan approval (opsional)"></textarea>
+                <button class="btn btn--primary" type="submit">Approve</button>
+            </form>
+        </section>
+    @endif
+
     <section class="panel panel--pad">
         <div class="panel__head">
             <div>
@@ -208,12 +231,34 @@
                 <h2>Hasil Audit</h2>
                 <p>
                     @if ($canEdit)
-                        Tulis temuan audit dalam bentuk teks biasa. Setiap penyimpanan membuat versi baru.
+                        @if ($result?->workflow_status?->value === 'revision_requested')
+                            <span class="chip chip--wip">REVISI DIMINTA</span>
+                            @php($latestRevision = $result->reviewEvents->where('action.value', 'revision_requested')->last())
+                            @if ($latestRevision)
+                                <span class="cell-meta">{{ $latestRevision->note }} · {{ $latestRevision->actor?->name ?? 'Akun terhapus' }} · {{ $latestRevision->created_at?->format('d M Y H:i') }}</span>
+                            @endif
+                        @else
+                            Tulis temuan audit dalam bentuk teks biasa. Setiap penyimpanan membuat versi baru.
+                        @endif
                     @elseif ($result?->workflow_status?->value === 'submitted')
                         <span class="chip chip--done">SUBMITTED / MENUNGGU REVIEW</span>
                         <span class="cell-meta">
                             {{ $result->submitted_at?->format('d M Y H:i') }} ·
                             {{ $result->submitter?->name ?? 'Akun terhapus' }}
+                        </span>
+                    @elseif ($result?->workflow_status?->value === 'revision_requested')
+                        <span class="chip chip--wip">REVISI DIMINTA</span>
+                        @php($latestRevision = $result->reviewEvents->where('action.value', 'revision_requested')->last())
+                        @if ($latestRevision)
+                            <span class="cell-meta">
+                                {{ $latestRevision->note }} · {{ $latestRevision->actor?->name ?? 'Akun terhapus' }} · {{ $latestRevision->created_at?->format('d M Y H:i') }}
+                            </span>
+                        @endif
+                    @elseif ($result?->workflow_status?->value === 'approved')
+                        <span class="chip chip--done">APPROVED</span>
+                        <span class="cell-meta">
+                            {{ $result->approved_at?->format('d M Y H:i') }} ·
+                            {{ $result->approver?->name ?? 'Akun terhapus' }}
                         </span>
                     @elseif ($result)
                         Draft tersimpan. Anda hanya dapat melihat karena bukan PIC indikator ini (read only).
@@ -279,7 +324,9 @@
                 <form method="POST" action="{{ route('audit-projects.work.submit', [$project, $indicator]) }}" style="margin-top: 14px;">
                     @csrf
                     <input type="hidden" name="lock_version" value="{{ $result->lock_version }}">
-                    <button class="btn btn--primary" type="submit" onclick="return confirm('Kirim Hasil Audit untuk review? Setelah dikirim, draft dan evidence tidak dapat diubah.')">Kirim untuk Review</button>
+                    <button class="btn btn--primary" type="submit" onclick="return confirm('Kirim Hasil Audit untuk review? Setelah dikirim, draft dan evidence tidak dapat diubah.')">
+                        {{ $result?->workflow_status?->value === 'revision_requested' ? 'Kirim Ulang untuk Review' : 'Kirim untuk Review' }}
+                    </button>
                 </form>
             @endif
         @else

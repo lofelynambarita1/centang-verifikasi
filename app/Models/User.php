@@ -97,4 +97,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(AuditIndicatorResultVersion::class, 'changed_by');
     }
+
+    /** @return HasMany<AuditResultReviewEvent, $this> */
+    public function auditResultReviewEvents(): HasMany
+    {
+        return $this->hasMany(AuditResultReviewEvent::class, 'actor_id');
+    }
 }

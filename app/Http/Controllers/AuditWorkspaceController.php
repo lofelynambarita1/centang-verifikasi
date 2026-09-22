@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ApproveAuditResultRequest;
+use App\Http\Requests\RequestAuditResultRevisionRequest;
 use App\Http\Requests\SaveDraftResultRequest;
 use App\Http\Requests\SubmitAuditResultRequest;
 use App\Models\AuditIndicatorResult;
@@ -38,7 +40,7 @@ class AuditWorkspaceController extends Controller
 
         $result = AuditIndicatorResult::query()
             ->where('audit_project_indicator_id', $indicator->id)
-            ->with(['versions.changedBy', 'submitter'])
+            ->with(['versions.changedBy', 'submitter', 'approver', 'reviewEvents.actor'])
             ->first();
 
         $user = auth()->user();
@@ -49,10 +51,11 @@ class AuditWorkspaceController extends Controller
             'result' => $result,
             'canEdit' => $user->can('update', $indicator),
             'canSubmit' => $result !== null
-                && $result->workflow_status?->value === 'draft'
+                && in_array($result->workflow_status?->value, ['draft', 'revision_requested'], true)
                 && $result->assessment_status !== null
                 && trim((string) $result->result_text) !== ''
                 && $user->can('update', $indicator),
+            'canReview' => $user->can('review', $indicator),
             'versions' => $result?->versions->sortByDesc('version_number')->take(3) ?? collect(),
             'navigation' => $this->navigation($project, $user, $indicator),
             'evidences' => $indicator->activeEvidences->sortBy([
@@ -137,6 +140,42 @@ class AuditWorkspaceController extends Controller
         );
 
         return back()->with('success', 'Hasil Audit dikirim untuk review.');
+    }
+
+    public function requestRevision(
+        RequestAuditResultRevisionRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+    ): RedirectResponse {
+        abort_if($indicator->audit_project_id !== $auditProject->id, 404);
+
+        $this->workflow->requestRevision(
+            $auditProject,
+            $indicator,
+            $request->user(),
+            $request->expectedLockVersion(),
+            $request->validated('note'),
+        );
+
+        return back()->with('success', 'Revisi diminta untuk Hasil Audit.');
+    }
+
+    public function approve(
+        ApproveAuditResultRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+    ): RedirectResponse {
+        abort_if($indicator->audit_project_id !== $auditProject->id, 404);
+
+        $this->workflow->approve(
+            $auditProject,
+            $indicator,
+            $request->user(),
+            $request->expectedLockVersion(),
+            $request->validated('note'),
+        );
+
+        return back()->with('success', 'Hasil Audit disetujui.');
     }
 
     /**
