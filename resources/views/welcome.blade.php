@@ -20,12 +20,35 @@
 @section('heading', 'Dashboard')
 
 @section('actions')
-    <a class="btn btn--ghost" href="{{ route('companies.index') }}">Kelola perusahaan</a>
-    <a class="btn btn--primary" href="{{ route('companies.create') }}">+ Perusahaan baru</a>
 @endsection
 
 @section('content')
     <p class="page-intro">Ringkasan status verifikasi audit seluruh perusahaan dalam satu tampilan.</p>
+
+    <section class="panel panel--pad filter-panel" aria-label="Pencarian dan filter dashboard">
+        <form method="GET" action="{{ route('dashboard') }}" class="filter-form">
+            <div class="field filter-field">
+                <label for="dashboard-search">Cari perusahaan</label>
+                <input id="dashboard-search" name="search" type="search" value="{{ old('search', $filters['search'] ?? '') }}" placeholder="Nama perusahaan, industri, atau alamat">
+            </div>
+
+            <div class="field filter-field">
+                <label for="dashboard-status">Status audit</label>
+                <select id="dashboard-status" name="status">
+                    <option value="">Semua status</option>
+                    <option value="completed" {{ (($filters['status'] ?? '') === 'completed') ? 'selected' : '' }}>Selesai</option>
+                    <option value="in_progress" {{ (($filters['status'] ?? '') === 'in_progress') ? 'selected' : '' }}>Sedang berjalan</option>
+                    <option value="pending" {{ (($filters['status'] ?? '') === 'pending') ? 'selected' : '' }}>Belum mulai</option>
+                    <option value="no_audit" {{ (($filters['status'] ?? '') === 'no_audit') ? 'selected' : '' }}>Belum punya audit</option>
+                </select>
+            </div>
+
+            <div class="filter-actions">
+                <button type="submit" class="btn btn--primary">Terapkan</button>
+                <a href="{{ route('dashboard') }}" class="btn btn--ghost">Reset</a>
+            </div>
+        </form>
+    </section>
 
     <section class="stat-grid" aria-label="Ringkasan audit">
         <article class="stat-card stat-card--green">
@@ -82,7 +105,7 @@
                     <h2>Progres perusahaan</h2>
                     <p>Status verifikasi per auditee</p>
                 </div>
-                <a class="panel__link" href="{{ route('companies.index') }}">Lihat semua →</a>
+                <a class="panel__link" href="{{ route('companies.index') }}">Kelola perusahaan</a>
             </div>
 
             <div class="table-wrap">
@@ -102,8 +125,8 @@
                             $audit = $row['audit'];
                             $statusClass = $audit?->status === 'completed' ? 'chip--done' : ($audit?->status === 'in_progress' ? 'chip--wip' : 'chip--todo');
                             $statusLabel = $audit?->status === 'completed' ? 'Selesai' : ($audit?->status === 'in_progress' ? 'Proses verifikasi' : 'Belum mulai');
-                            $auditMeta = $audit?->auditor_name
-                                ? 'Oleh '.$audit->auditor_name
+                            $auditMeta = $audit?->auditorNamesText()
+                                ? 'Oleh '.$audit->auditorNamesText()
                                 : ($audit?->due_date?->format('d F Y') ?: 'Auditor belum ditentukan');
                         @endphp
                         <tr>
@@ -132,7 +155,7 @@
                                 <div class="cell-meta"><strong>{{ $row['verified_items'] }}</strong> / {{ $row['total_items'] }} indikator dinilai</div>
                             </td>
                             <td>
-                                <a class="link" href="{{ $audit ? route('audits.show', $audit) : route('companies.show', $row['company']) }}">Rincian →</a>
+                                <a class="link" href="{{ $audit ? route('audits.show', $audit) : route('companies.show', $row['company']) }}">Rincian</a>
                             </td>
                         </tr>
                     @empty

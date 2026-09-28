@@ -20,12 +20,79 @@
 @section('heading', 'Verifikasi audit')
 
 @section('actions')
-    <a class="btn btn--ghost" href="{{ route('companies.index') }}">← Perusahaan</a>
-    <a class="btn btn--ghost" href="{{ route('companies.edit', $audit->company) }}">Edit data</a>
-    <a class="btn btn--ghost" href="{{ route('audits.report', $audit) }}">Cetak laporan</a>
-    <a class="btn btn--ghost" href="{{ route('audits.download', $audit) }}">Download Word</a>
-    <a class="btn btn--primary" href="{{ route('audits.pdf', $audit) }}">Download PDF</a>
+    <div class="page-actions">
+        <a class="btn btn--outline" href="{{ route('companies.index') }}">Perusahaan</a>
+        <a class="btn btn--outline" href="{{ route('companies.edit', $audit->company) }}">Edit data</a>
+
+        <div class="menu-split" data-menu>
+            <button class="btn btn--outline menu-split__trigger menu-split__trigger--plain" type="button" aria-expanded="false" aria-controls="audit-export-menu">
+                Cetak laporan
+            </button>
+            <div class="menu-split__panel" id="audit-export-menu" role="menu" aria-label="Export laporan">
+                <a class="menu-split__item" href="{{ route('audits.report', $audit) }}" role="menuitem">Cetak laporan</a>
+                <a class="menu-split__item" href="{{ route('audits.download', $audit) }}" role="menuitem">Download Word</a>
+                <a class="menu-split__item menu-split__item--primary" href="{{ route('audits.pdf', $audit) }}" role="menuitem">Download PDF</a>
+            </div>
+        </div>
+    </div>
 @endsection
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const wrappers = document.querySelectorAll('[data-menu]');
+
+            wrappers.forEach((wrapper) => {
+                const trigger = wrapper.querySelector('.menu-split__trigger');
+                const panel = wrapper.querySelector('.menu-split__panel');
+
+                if (!trigger || !panel) {
+                    return;
+                }
+
+                const closeMenu = () => {
+                    wrapper.classList.remove('is-open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                    panel.setAttribute('hidden', 'hidden');
+                };
+
+                const openMenu = () => {
+                    wrapper.classList.add('is-open');
+                    trigger.setAttribute('aria-expanded', 'true');
+                    panel.removeAttribute('hidden');
+                };
+
+                trigger.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    const isOpen = wrapper.classList.contains('is-open');
+                    wrappers.forEach((menu) => {
+                        const menuTrigger = menu.querySelector('.menu-split__trigger');
+                        const menuPanel = menu.querySelector('.menu-split__panel');
+                        if (menu !== wrapper && menuTrigger && menuPanel) {
+                            menu.classList.remove('is-open');
+                            menuTrigger.setAttribute('aria-expanded', 'false');
+                            menuPanel.setAttribute('hidden', 'hidden');
+                        }
+                    });
+
+                    if (isOpen) {
+                        closeMenu();
+                    } else {
+                        openMenu();
+                    }
+                });
+
+                document.addEventListener('click', function (event) {
+                    if (!wrapper.contains(event.target)) {
+                        closeMenu();
+                    }
+                });
+
+                closeMenu();
+            });
+        });
+    </script>
+@endpush
 
 @section('content')
     <section class="hero">
@@ -39,11 +106,53 @@
             <div class="meta-row"><span>Nama perusahaan</span><b>{{ $audit->company->name }}</b></div>
             <div class="meta-row"><span>Alamat</span><b>{{ $audit->company->address ?: 'Belum diisi' }}</b></div>
             <div class="meta-row"><span>Bidang usaha</span><b>{{ $audit->company->industry ?: 'Belum diisi' }}</b></div>
-            <div class="meta-row"><span>Auditor</span><b>{{ $audit->auditor_name ?: 'Belum ditentukan' }}</b></div>
+            <div class="meta-row"><span>Auditor</span><b>{{ $audit->auditorNamesText() ?: 'Belum ditentukan' }}</b></div>
             <div class="meta-row"><span>Tanggal audit</span><b>{{ $audit->due_date?->translatedFormat('d F Y') ?: '-' }}</b></div>
             <div class="meta-row"><span>Status audit</span><b>{{ $audit->status === 'completed' ? 'Selesai' : ($audit->status === 'in_progress' ? 'Sedang diverifikasi' : 'Belum mulai') }}</b></div>
         </div>
     </section>
+
+    @if (auth()->user()?->canManageAssignments() && $isIspoChecklist)
+        @php
+            $principleTitles = [
+                1 => 'Kepatuhan terhadap peraturan',
+                2 => 'Praktik perkebunan yang baik',
+                3 => 'Lingkungan hidup dan keanekaragaman hayati',
+                4 => 'Tanggung jawab ketenagakerjaan',
+                5 => 'Tanggung jawab sosial masyarakat',
+                6 => 'Transparansi',
+                7 => 'Peningkatan usaha berkelanjutan',
+            ];
+        @endphp
+        <section class="panel panel--pad assignment-panel">
+            <div class="panel__head">
+                <div>
+                    <h2>Penanggung jawab prinsip</h2>
+                    <p>Satu prinsip dapat dikerjakan oleh beberapa auditor sekaligus.</p>
+                </div>
+                <span class="role-badge role-badge--lead_audit">Admin / Lead audit</span>
+            </div>
+            <form method="POST" action="{{ route('audits.assignments.update', $audit) }}" class="assignment-form">
+                @csrf
+                @method('PUT')
+                @foreach ($principleTitles as $number => $title)
+                    @php $assignedUserIds = $audit->assignees->where('pivot.principle_number', $number)->pluck('id')->all(); @endphp
+                    <fieldset class="assignment-row">
+                        <legend><strong>Prinsip {{ $number }}</strong><span>{{ $title }}</span></legend>
+                        <div class="assignment-users">
+                            @forelse ($users as $user)
+                                <label class="check-control"><input type="checkbox" name="assignments[{{ $number }}][users][]" value="{{ $user->id }}" @checked(in_array($user->id, $assignedUserIds, true))><span>{{ $user->name }}</span><small>{{ str_replace('_', ' ', ucfirst($user->role)) }}</small></label>
+                            @empty
+                                <span class="cell-meta">Belum ada lead audit atau auditor.</span>
+                            @endforelse
+                        </div>
+                        <input type="hidden" name="assignments[{{ $number }}][principle]" value="{{ $number }}">
+                    </fieldset>
+                @endforeach
+                <button class="btn btn--primary" type="submit">Simpan penugasan</button>
+            </form>
+        </section>
+    @endif
 
     <section class="audit-summary" aria-label="Progres verifikasi keseluruhan">
         <div class="summary-head">
@@ -153,7 +262,19 @@
                                                     <input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png">
                                                 </label>
                                                 @if ($hasil->evidence_path)
-                                                    <a class="hasil-evidence-link" href="{{ asset('storage/'.$hasil->evidence_path) }}" target="_blank" rel="noreferrer">Lihat bukti</a>
+                                                    @php
+                                                        $evidenceUrl = Storage::disk('public')->url($hasil->evidence_path);
+                                                        $evidenceExt = strtolower(pathinfo($hasil->evidence_path, PATHINFO_EXTENSION));
+                                                        $isImageEvidence = in_array($evidenceExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
+                                                    @endphp
+
+                                                    @if ($isImageEvidence)
+                                                        <a class="evidence-preview-link" href="{{ $evidenceUrl }}" target="_blank" rel="noreferrer">
+                                                            <img class="evidence-thumbnail" src="{{ $evidenceUrl }}" alt="Bukti audit">
+                                                        </a>
+                                                    @endif
+
+                                                    <a class="hasil-evidence-link" href="{{ $evidenceUrl }}" target="_blank" rel="noreferrer">Lihat bukti</a>
                                                 @endif
                                                 <button class="save-btn" type="submit">Simpan</button>
                                             </div>

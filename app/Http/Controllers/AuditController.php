@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AssignAuditPrinciplesRequest;
 use App\Http\Requests\UpdateAuditItemRequest;
 use App\Models\Audit;
 use App\Models\AuditHasil;
 use App\Models\AuditItem;
+use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +21,7 @@ class AuditController extends Controller
 {
     public function show(Audit $audit): View
     {
-        $audit->load(['company', 'findings']);
+        $audit->load(['company', 'findings', 'assignees']);
         $allItems = $audit->items()->with('hasils')->get();
         $isIspoChecklist = $allItems->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
 
@@ -42,11 +44,34 @@ class AuditController extends Controller
             'principles' => $principles,
             'isIspoChecklist' => $isIspoChecklist,
             'currentPage' => $currentPage,
+            'users' => User::query()->whereIn('role', ['lead_audit', 'auditor'])->orderBy('name')->get(),
         ]);
+    }
+
+    public function assignPrinciples(AssignAuditPrinciplesRequest $request, Audit $audit): RedirectResponse
+    {
+        $assignments = collect($request->validated()['assignments'])
+            ->flatMap(fn (array $assignment): array => collect($assignment['users'] ?? [])->unique()->map(fn (int $userId): array => [
+                'user_id' => $userId,
+                'principle_number' => $assignment['principle'],
+            ])->all())
+            ->values()
+            ->all();
+
+        $audit->assignees()->detach();
+        foreach ($assignments as $assignment) {
+            $audit->assignees()->attach($assignment['user_id'], [
+                'principle_number' => $assignment['principle_number'],
+            ]);
+        }
+
+        return back()->with('success', 'Penugasan prinsip audit berhasil diperbarui.');
     }
 
     public function updateItem(UpdateAuditItemRequest $request, AuditItem $auditItem): RedirectResponse
     {
+        abort_unless($request->user()?->canWorkOn($auditItem), 403);
+
         $auditItem->update($request->validated());
         $auditItem->audit()->update(['status' => 'in_progress']);
 
@@ -58,6 +83,8 @@ class AuditController extends Controller
 
     public function storeEvidence(Request $request, AuditItem $auditItem): RedirectResponse
     {
+        abort_unless($request->user()?->canWorkOn($auditItem), 403);
+
         $request->validate(['evidence' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240']]);
         $auditItem->update(['evidence_path' => $request->file('evidence')->store('audit-evidence', 'public')]);
 
@@ -66,6 +93,8 @@ class AuditController extends Controller
 
     public function storeHasil(Request $request, AuditItem $auditItem): RedirectResponse
     {
+        abort_unless($request->user()?->canWorkOn($auditItem), 403);
+
         $validated = $this->validateHasil($request);
 
         $auditItem->hasils()->create([
@@ -82,6 +111,8 @@ class AuditController extends Controller
 
     public function updateHasil(Request $request, AuditHasil $auditHasil): RedirectResponse
     {
+        abort_unless($request->user()?->canWorkOn($auditHasil->auditItem), 403);
+
         $validated = $this->validateHasil($request);
 
         $auditHasil->update(['content' => $validated['content'] ?? null]);
@@ -101,6 +132,8 @@ class AuditController extends Controller
 
     public function destroyHasil(AuditHasil $auditHasil): RedirectResponse
     {
+        abort_unless(request()->user()?->canWorkOn($auditHasil->auditItem), 403);
+
         $audit = $auditHasil->auditItem->audit;
 
         if ($auditHasil->evidence_path) {
@@ -126,6 +159,8 @@ class AuditController extends Controller
 
     public function complete(Audit $audit): RedirectResponse
     {
+        abort_unless(auth()->user()?->canManageAssignments(), 403);
+
         $audit->load('items');
         abort_if($audit->items->contains('status', 'pending'), 422, 'Semua item checklist harus diisi terlebih dahulu.');
 
@@ -141,6 +176,8 @@ class AuditController extends Controller
 
     public function pdf(Audit $audit): mixed
     {
+        set_time_limit(120);
+
         $audit->load(['company', 'items.hasils', 'findings']);
         $items = $audit->items;
         $isIspoChecklist = $items->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
@@ -202,7 +239,7 @@ class AuditController extends Controller
             'Nama Perusahaan' => $audit->company->name ?: '-',
             'Alamat Perusahaan' => $audit->company->address ?: '-',
             'Bidang Usaha' => $audit->company->industry ?: '-',
-            'Auditor' => $audit->auditor_name ?: '-',
+            'Auditor' => $audit->auditorNamesText() ?: '-',
             'Tanggal Audit' => $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-',
         ];
         $factTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 70]);
@@ -306,7 +343,7 @@ class AuditController extends Controller
             $cell->addText('(ttd)', ['bold' => true], ['alignment' => 'center']);
             $cell->addText('');
         }
-        $left->addText($audit->auditor_name ?: '(Nama Auditor)', [], ['alignment' => 'center']);
+        $left->addText($audit->auditorNamesText() ?: '(Nama Auditor)', [], ['alignment' => 'center']);
         $left->addText('Auditor', ['size' => 9, 'color' => '555555'], ['alignment' => 'center']);
         $right->addText('(Nama Pimpinan Perusahaan)', [], ['alignment' => 'center']);
         $right->addText($audit->company->name ?: 'Pimpinan Perusahaan', ['size' => 9, 'color' => '555555'], ['alignment' => 'center']);

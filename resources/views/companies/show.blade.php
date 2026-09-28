@@ -75,7 +75,7 @@
                                 <div class="avatar {{ $avatarColors[$loop->index % 5] }}">{{ $initials($audit->title ?: $company->name) }}</div>
                                 <div>
                                     <strong>{{ $audit->title ?: 'Audit verifikasi' }}</strong>
-                                    <span>{{ $audit->auditor_name ?: 'Auditor belum ditentukan' }}</span>
+                                    <span>{{ $audit->auditorNamesText() ?: 'Auditor belum ditentukan' }}</span>
                                 </div>
                             </div>
                         </td>

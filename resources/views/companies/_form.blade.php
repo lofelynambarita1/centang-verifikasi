@@ -23,6 +23,10 @@
         <input id="contact_email" type="email" name="contact_email" value="{{ old('contact_email', $company?->contact_email) }}">
     </div>
     <div class="field">
+        <label for="auditor_name">Nama auditor</label>
+        <textarea id="auditor_name" name="auditor_name" rows="3" placeholder="Pisahkan nama auditor dengan koma atau baris baru">{{ old('auditor_name', $company?->audits->first()?->auditor_name) }}</textarea>
+    </div>
+    <div class="field">
         <label for="due_date">Deadline audit</label>
         <input id="due_date" type="date" name="due_date" value="{{ old('due_date', $company?->audits->first()?->due_date?->format('Y-m-d')) }}">
     </div>

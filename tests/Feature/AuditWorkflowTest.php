@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Company;
+use App\Models\User;
 use App\Support\IspoChecklist;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -12,6 +13,12 @@ use Tests\TestCase;
 class AuditWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+    }
 
     public function test_a_company_creation_copies_the_iso_checklist_into_the_new_audit(): void
     {
@@ -123,6 +130,37 @@ class AuditWorkflowTest extends TestCase
         $this->assertStringContainsString('laporan-verifikasi-ispo-', (string) $response->headers->get('content-disposition'));
     }
 
+    public function test_audit_pdf_ignores_overly_large_image_evidence_to_avoid_timeout(): void
+    {
+        Storage::fake('public');
+
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit pdf large evidence']);
+        $item = $audit->items()->create([
+            'title' => '1.1.1 Izin lokasi dan KKPR',
+            'sort_order' => 1,
+            'status' => 'compliant',
+            'note' => 'Dokumen lengkap.',
+        ]);
+
+        $file = UploadedFile::fake()->image('bukti-large.jpg', 2000, 2000);
+        $path = $file->store('audit-evidence', 'public');
+        $fullPath = Storage::disk('public')->path($path);
+        file_put_contents($fullPath, str_repeat('A', 3 * 1024 * 1024));
+
+        $item->hasils()->create([
+            'content' => 'Bukti foto terlampir.',
+            'evidence_path' => $path,
+            'sort_order' => 0,
+        ]);
+
+        $response = $this->get(route('audits.pdf', $audit));
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
+        $this->assertStringNotContainsString('data:image', (string) $response->getContent());
+    }
+
     public function test_audit_download_returns_one_docx_file_for_all_principles(): void
     {
         $company = Company::factory()->create();
@@ -194,6 +232,8 @@ class AuditWorkflowTest extends TestCase
 
     public function test_report_shows_every_hasil_audit_entry_and_evidence(): void
     {
+        Storage::fake('public');
+
         $company = Company::factory()->create();
         $audit = $company->audits()->create(['title' => 'Audit laporan hasil']);
         $item = $audit->items()->create(['title' => '1.1.1 Izin lokasi', 'description' => 'Parameter satu', 'sort_order' => 1]);
@@ -203,9 +243,11 @@ class AuditWorkflowTest extends TestCase
             'sort_order' => 0,
         ]);
 
+        Storage::disk('public')->put('audit-evidence/bukti-1.jpg', 'fake-image-content');
+
         $this->get(route('audits.report', $audit))
             ->assertOk()
             ->assertSee('Hasil audit lapangan lengkap.')
-            ->assertSee('bukti-1.jpg');
+            ->assertSee('src="'.Storage::disk('public')->url('audit-evidence/bukti-1.jpg').'"', false);
     }
 }

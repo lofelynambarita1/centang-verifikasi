@@ -51,7 +51,7 @@
                             </div>
                         </td>
                         <td>
-                            <strong>{{ $audit?->auditor_name ?: 'Belum ditentukan' }}</strong>
+                            <strong>{{ $audit?->auditorNamesText() ?: 'Belum ditentukan' }}</strong>
                             <div class="cell-meta">{{ $audit?->due_date?->format('d F Y') ?: '-' }}</div>
                         </td>
                         <td>

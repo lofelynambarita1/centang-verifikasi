@@ -6,6 +6,7 @@ use Database\Factories\AuditFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Audit extends Model
@@ -35,5 +36,38 @@ class Audit extends Model
     public function findings(): HasMany
     {
         return $this->hasMany(AuditFinding::class);
+    }
+
+    public function assignees(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'audit_principle_user')
+            ->withPivot('principle_number')
+            ->withTimestamps();
+    }
+
+    public function assigneesForPrinciple(int $principleNumber): BelongsToMany
+    {
+        return $this->assignees()->wherePivot('principle_number', $principleNumber);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function auditorNames(): array
+    {
+        if (blank($this->auditor_name)) {
+            return [];
+        }
+
+        return collect(preg_split('/\r\n|\r|\n|,/', $this->auditor_name))
+            ->map(fn (string $name): string => trim($name))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    public function auditorNamesText(): string
+    {
+        return implode(', ', $this->auditorNames());
     }
 }

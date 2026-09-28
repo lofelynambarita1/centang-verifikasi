@@ -12,7 +12,7 @@ class UpdateAuditItemRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->canWorkOn($this->route('auditItem')) ?? false;
     }
 
     /**

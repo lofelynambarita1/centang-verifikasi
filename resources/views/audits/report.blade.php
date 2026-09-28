@@ -45,7 +45,7 @@
                 <div><span>Nama Perusahaan</span><b>:</b><strong>{{ $audit->company->name ?: '-' }}</strong></div>
                 <div><span>Alamat Perusahaan</span><b>:</b><strong>{{ $audit->company->address ?: '-' }}</strong></div>
                 <div><span>Luasan Lahan</span><b>:</b><strong>-</strong></div>
-                <div><span>Auditor</span><b>:</b><strong>{{ $audit->auditor_name ?: '-' }}</strong></div>
+                <div><span>Auditor</span><b>:</b><strong>{{ $audit->auditorNamesText() ?: '-' }}</strong></div>
                 <div><span>Tanggal Audit</span><b>:</b><strong>{{ $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-' }}</strong></div>
             </div>
 
@@ -115,7 +115,14 @@
                                     @forelse ($item->hasils as $hasil)
                                         <p>{{ $hasil->content ?: '(tanpa keterangan)' }}</p>
                                         @if ($hasil->evidence_path)
-                                            <a class="hasil-bukti" href="{{ asset('storage/'.$hasil->evidence_path) }}" target="_blank" rel="noreferrer">Bukti: {{ basename($hasil->evidence_path) }}</a>
+                                            @php
+                                                $evidenceExt = strtolower(pathinfo($hasil->evidence_path, PATHINFO_EXTENSION));
+                                                $imageEvidence = in_array($evidenceExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
+                                            @endphp
+                                            @if ($imageEvidence)
+                                                <img class="hasil-evidence-image" src="{{ Storage::disk('public')->url($hasil->evidence_path) }}" alt="Bukti audit" style="display:block; max-width:220px; max-height:160px; margin-top:8px; border:1px solid #dfe5ee; border-radius:8px;" />
+                                            @endif
+                                            <a class="hasil-bukti" href="{{ Storage::disk('public')->url($hasil->evidence_path) }}" target="_blank" rel="noreferrer">Bukti: {{ basename($hasil->evidence_path) }}</a>
                                         @endif
                                     @empty
                                         <p>{{ $item->note ?: '-' }}</p>

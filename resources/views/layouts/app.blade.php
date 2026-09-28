@@ -11,15 +11,7 @@
 <div class="app-shell">
     <aside class="app-sidebar">
         <a class="app-brand" href="{{ route('dashboard') }}">
-            <span class="app-brand__mark" aria-hidden="true">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 6L9 17l-5-5"/>
-                </svg>
-            </span>
-            <span class="app-brand__text">
-                <strong>Centang</strong>
-                <small>Verifikasi Audit ISPO</small>
-            </span>
+            <img class="app-brand__logo" src="{{ asset('images/logogis.jpeg') }}" alt="Centang GIS logo" aria-hidden="true">
         </a>
         <p class="app-brand__sub">Permentan No. 33/2025 · Mode offline</p>
 
@@ -41,10 +33,26 @@
                 </svg>
                 <span>Perusahaan</span>
             </a>
+            @if (auth()->user()?->isAdmin())
+                <a class="app-nav__link @if (request()->routeIs('users.*')) active @endif" href="{{ route('users.index') }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    <span>Pengguna & role</span>
+                </a>
+            @endif
         </nav>
 
         <div class="app-sidebar__foot">
             <p class="app-sidebar__note">Data verifikasi tersimpan aman di perangkat ini.</p>
+            @auth
+                <form method="POST" action="{{ route('logout') }}" class="app-sidebar__logout-form">
+                    @csrf
+                    <button class="app-sidebar__logout" type="submit">Keluar</button>
+                </form>
+            @endauth
         </div>
     </aside>
 
@@ -54,9 +62,7 @@
                 <p class="app-eyebrow">@yield('eyebrow', 'VERIFIKASI AUDIT ISPO')</p>
                 <h1>@yield('heading', 'Dashboard')</h1>
             </div>
-            <div class="app-topbar__actions">
-                @yield('actions')
-            </div>
+            @yield('actions')
         </header>
 
         <main class="app-content">
@@ -67,6 +73,60 @@
         </main>
     </div>
 </div>
+
+@auth
+    <div class="profile-menu" data-profile-menu>
+        <button class="profile-pill" type="button" aria-expanded="false" aria-controls="profile-dropdown" aria-label="Profil pengguna">
+            <span class="profile-pill__avatar">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
+            <div class="profile-pill__meta">
+                <strong>{{ auth()->user()->name }}</strong>
+                <span>{{ str_replace('_', ' ', ucfirst(auth()->user()->role)) }}</span>
+            </div>
+        </button>
+
+        <div class="profile-dropdown" id="profile-dropdown" hidden>
+            <a href="{{ route('dashboard') }}" class="profile-dropdown__item">Masuk</a>
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <button type="submit" class="profile-dropdown__item profile-dropdown__item--danger">Keluar</button>
+            </form>
+        </div>
+    </div>
+@endauth
+
 @stack('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const menus = document.querySelectorAll('[data-profile-menu]');
+        menus.forEach((menu) => {
+            const trigger = menu.querySelector('.profile-pill');
+            const panel = menu.querySelector('.profile-dropdown');
+            if (!trigger || !panel) return;
+
+            trigger.addEventListener('click', function (event) {
+                event.stopPropagation();
+                const isOpen = !panel.hidden;
+                menus.forEach((other) => {
+                    const otherPanel = other.querySelector('.profile-dropdown');
+                    const otherTrigger = other.querySelector('.profile-pill');
+                    if (other !== menu && otherPanel && otherTrigger) {
+                        otherPanel.hidden = true;
+                        otherTrigger.setAttribute('aria-expanded', 'false');
+                    }
+                });
+
+                panel.hidden = isOpen;
+                trigger.setAttribute('aria-expanded', String(!isOpen));
+            });
+
+            document.addEventListener('click', function (event) {
+                if (!menu.contains(event.target)) {
+                    panel.hidden = true;
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+        });
+    });
+</script>
 </body>
 </html>

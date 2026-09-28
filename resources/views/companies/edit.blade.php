@@ -4,10 +4,6 @@
 @section('eyebrow', 'PERUSAHAAN')
 @section('heading', 'Edit data perusahaan')
 
-@section('actions')
-    <a class="btn btn--ghost" href="{{ route('companies.show', $company) }}">← Kembali</a>
-@endsection
-
 @section('content')
     <p class="page-intro">Perbarui data perusahaan. Perubahan langsung tersimpan pada semua audit yang terkait.</p>
 
@@ -16,7 +12,10 @@
             @csrf
             @method('PUT')
             @include('companies._form', ['company' => $company])
-            <button class="btn btn--primary form-submit" type="submit">Simpan perubahan</button>
+            <div class="form-actions">
+                <a class="btn btn--ghost" href="{{ route('companies.show', $company) }}">Kembali</a>
+                <button class="btn btn--primary form-submit" type="submit">Simpan perubahan</button>
+            </div>
         </form>
     </section>
 @endsection

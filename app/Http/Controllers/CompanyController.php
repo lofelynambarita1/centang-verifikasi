@@ -37,7 +37,7 @@ class CompanyController extends Controller
             $audit = $company->audits()->create([
                 'title' => 'Audit kepatuhan operasional',
                 'status' => 'pending',
-                'auditor_name' => 'Arif Rahman',
+                'auditor_name' => $request->input('auditor_name'),
                 'due_date' => $request->date('due_date'),
             ]);
             $audit->items()->createMany(self::checklistItems());

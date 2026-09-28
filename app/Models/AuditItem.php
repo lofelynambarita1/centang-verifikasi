@@ -26,4 +26,11 @@ class AuditItem extends Model
     {
         return $this->hasMany(AuditHasil::class)->orderBy('sort_order');
     }
+
+    public function principleNumber(): int
+    {
+        preg_match('/^(\d+)/', $this->title, $matches);
+
+        return (int) ($matches[1] ?? 0);
+    }
 }
