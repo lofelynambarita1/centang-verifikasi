@@ -26,5 +26,8 @@ class DashboardFilterTest extends TestCase
         $response->assertOk();
         $response->assertSee('Alpha Timber');
         $response->assertDontSee('Beta Retail');
+        $response->assertSee('href="#company-progress"', false);
+        $response->assertSee('href="#indicator-summary"', false);
+        $response->assertSee('href="#recent-audits"', false);
     }
 }

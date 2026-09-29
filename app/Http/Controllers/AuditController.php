@@ -191,7 +191,7 @@ class AuditController extends Controller
 
     public function pdf(Audit $audit): mixed
     {
-        set_time_limit(120);
+        set_time_limit(300);
 
         $audit->load(['company', 'items.hasils', 'findings']);
         $items = $audit->items;

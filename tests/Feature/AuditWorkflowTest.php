@@ -130,6 +130,25 @@ class AuditWorkflowTest extends TestCase
         $this->assertStringContainsString('laporan-verifikasi-ispo-', (string) $response->headers->get('content-disposition'));
     }
 
+    public function test_audit_pdf_download_handles_the_full_ispo_checklist(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit checklist ISPO lengkap']);
+        $items = collect(IspoChecklist::items())
+            ->map(fn (array $item, int $sortOrder): array => $item + [
+                'sort_order' => $sortOrder,
+                'status' => 'pending',
+            ])
+            ->all();
+        $audit->items()->createMany($items);
+
+        $response = $this->get(route('audits.pdf', $audit));
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
+        $this->assertStringContainsString('laporan-verifikasi-ispo-', (string) $response->headers->get('content-disposition'));
+    }
+
     public function test_audit_pdf_ignores_overly_large_image_evidence_to_avoid_timeout(): void
     {
         Storage::fake('public');

@@ -98,11 +98,26 @@
         </article>
     </section>
 
+    <nav class="dashboard-subnav" aria-label="Bagian dashboard">
+        <a class="dashboard-subnav__link" href="#company-progress">
+            <span class="dashboard-subnav__index">01</span>
+            <span>Progres perusahaan</span>
+        </a>
+        <a class="dashboard-subnav__link" href="#indicator-summary">
+            <span class="dashboard-subnav__index">02</span>
+            <span>Status indikator</span>
+        </a>
+        <a class="dashboard-subnav__link" href="#recent-audits">
+            <span class="dashboard-subnav__index">03</span>
+            <span>Audit terkini</span>
+        </a>
+    </nav>
+
     <div class="dash-grid">
-        <section class="panel panel--pad">
+        <section class="panel panel--pad" id="company-progress">
             <div class="panel__head">
                 <div>
-                    <h2>Progres perusahaan</h2>
+                    <h2>Progres Verifikasi Perusahaan</h2>
                     <p>Status verifikasi per auditee</p>
                 </div>
                 <a class="panel__link" href="{{ route('companies.index') }}">Kelola perusahaan</a>
@@ -179,10 +194,10 @@
         </section>
 
         <aside class="dash-side">
-            <div class="panel panel--pad">
+            <div class="panel panel--pad" id="indicator-summary">
                 <div class="panel__head">
                     <div>
-                        <h2>Ringkasan indikator</h2>
+                        <h2>Status Seluruh Indikator</h2>
                         <p>Total keseluruhan penilaian</p>
                     </div>
                 </div>
@@ -202,7 +217,7 @@
                 <div class="donut__foot">{{ $stats['completed_items'] }} dari {{ $totalItems }} indikator telah dinilai</div>
             </div>
 
-            <div class="panel panel--pad">
+            <div class="panel panel--pad" id="recent-audits">
                 <div class="panel__head">
                     <div>
                         <h2>Audit terkini</h2>

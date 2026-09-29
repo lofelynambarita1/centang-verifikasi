@@ -185,7 +185,6 @@
             margin: 0 0 10px;
             border-collapse: collapse;
             table-layout: fixed;
-            page-break-inside: avoid;
         }
 
         .verification-record td {
@@ -199,10 +198,6 @@
             font-size: 10.5px;
         }
 
-        .record-content {
-            padding: 0;
-        }
-
         .record-head {
             margin: 0;
             padding: 7px 8px;
@@ -211,22 +206,29 @@
             background: #f6f6f7;
         }
 
-        .record-rows {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .record-rows td {
+        .record-label,
+        .record-value {
             padding: 6px 8px;
             vertical-align: top;
             font-size: 10.5px;
-            border-top: 1px solid #111;
         }
 
-        .record-rows td.lbl {
+        .record-label {
             width: 94px;
             font-weight: 800;
             border-right: 1px solid #111;
+            background: #f6f6f7;
+        }
+
+        .record-value {
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+        }
+
+        .record-value img {
+            max-width: 150px;
+            max-height: 110px;
+            object-fit: contain;
         }
 
         .status-compliant { color: #2f4bab; }
@@ -387,47 +389,44 @@
 
                 <table class="verification-record">
                     <tr>
-                        <td class="record-index" rowspan="2">{{ $code }}</td>
+                        <td class="record-index">{{ $code }}</td>
                         <td class="record-head">{{ $indicatorTitle }}</td>
                     </tr>
                     <tr>
-                        <td class="record-content">
-                            <table class="record-rows">
-                                <tr>
-                                    <td class="lbl">Parameter</td>
-                                    <td>{!! nl2br(e($item->description ?: 'Tersedia dokumen dan bukti pendukung sesuai persyaratan.')) !!}</td>
-                                </tr>
-                                <tr>
-                                    <td class="lbl">Hasil Audit</td>
-                                    <td>
-                                        @forelse ($item->hasils as $hasil)
-                                            <div>{{ $hasil->content ?: '(tanpa keterangan)' }}</div>
-                                            @if ($hasil->evidence_path)
-                                                @php
-                                                    $evidencePath = Storage::disk('public')->path($hasil->evidence_path);
-                                                    $evidenceExt = strtolower(pathinfo($hasil->evidence_path, PATHINFO_EXTENSION));
-                                                    $isImageEvidence = in_array($evidenceExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
-                                                    $evidenceSize = is_file($evidencePath) ? filesize($evidencePath) : 0;
-                                                    $evidenceDataUri = $isImageEvidence && $evidenceSize > 0 && $evidenceSize <= 2 * 1024 * 1024 && is_file($evidencePath)
-                                                        ? 'data:'.mime_content_type($evidencePath).';base64,'.base64_encode(file_get_contents($evidencePath))
-                                                        : null;
-                                                @endphp
-                                                @if ($evidenceDataUri)
-                                                    <img src="{{ $evidenceDataUri }}" style="max-width: 180px; max-height: 120px; display: block; margin-top: 8px; border: 1px solid #dfe5ee;" alt="Bukti audit">
-                                                @endif
-                                                <div>Bukti: {{ basename($hasil->evidence_path) }}</div>
-                                            @endif
-                                        @empty
-                                            {{ $item->note ?: '-' }}
-                                        @endforelse
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="lbl">Status</td>
-                                    <td class="status-{{ $item->status }}"><strong>{{ $statusLabels[$item->status] ?? 'Belum diperiksa' }}</strong></td>
-                                </tr>
-                            </table>
-                        </td>
+                        <td class="record-label">Parameter</td>
+                        <td class="record-value">{!! nl2br(e($item->description ?: 'Tersedia dokumen dan bukti pendukung sesuai persyaratan.')) !!}</td>
+                    </tr>
+                    @forelse ($item->hasils as $hasil)
+                        <tr>
+                            <td class="record-label">{{ $loop->first ? 'Hasil Audit' : '' }}</td>
+                            <td class="record-value">
+                                {{ $hasil->content ?: '(tanpa keterangan)' }}
+                                @if ($hasil->evidence_path)
+                                    @php
+                                        $evidencePath = Storage::disk('public')->path($hasil->evidence_path);
+                                        $evidenceExt = strtolower(pathinfo($hasil->evidence_path, PATHINFO_EXTENSION));
+                                        $isImageEvidence = in_array($evidenceExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
+                                        $evidenceSize = is_file($evidencePath) ? filesize($evidencePath) : 0;
+                                        $evidenceDataUri = $isImageEvidence && $evidenceSize > 0 && $evidenceSize <= 2 * 1024 * 1024 && is_file($evidencePath)
+                                            ? 'data:'.mime_content_type($evidencePath).';base64,'.base64_encode(file_get_contents($evidencePath))
+                                            : null;
+                                    @endphp
+                                    @if ($evidenceDataUri)
+                                        <img src="{{ $evidenceDataUri }}" style="display: block; margin-top: 8px; border: 1px solid #dfe5ee;" alt="Bukti audit">
+                                    @endif
+                                    <div>Bukti: {{ basename($hasil->evidence_path) }}</div>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td class="record-label">Hasil Audit</td>
+                            <td class="record-value">{{ $item->note ?: '-' }}</td>
+                        </tr>
+                    @endforelse
+                    <tr>
+                        <td class="record-label">Status</td>
+                        <td class="record-value status-{{ $item->status }}"><strong>{{ $statusLabels[$item->status] ?? 'Belum diperiksa' }}</strong></td>
                     </tr>
                 </table>
             @endforeach
