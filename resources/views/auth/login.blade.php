@@ -8,8 +8,7 @@
 </head>
 <body class="auth-page">
 <main class="auth-card">
-    <div class="app-brand__mark auth-mark" aria-hidden="true">✓</div>
-    <p class="app-eyebrow">CENTANG · AUDIT ISPO</p>
+    <img class="auth-logo" src="{{ asset('images/logogis.jpeg') }}" alt="Logo GIS">
     <h1>Masuk ke ruang audit</h1>
     <p class="auth-intro">Kelola penugasan prinsip dan proses verifikasi sesuai peran tim Anda.</p>
     @if ($errors->any())

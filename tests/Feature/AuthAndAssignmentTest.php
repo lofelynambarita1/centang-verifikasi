@@ -42,6 +42,46 @@ class AuthAndAssignmentTest extends TestCase
         $this->assertSame(3, $audit->assignees()->count());
     }
 
+    public function test_admin_can_open_the_auditor_assignment_menu(): void
+    {
+        $audit = Company::factory()->create()->audits()->create(['title' => 'Audit ISPO demo']);
+        $audit->items()->create(['title' => '1.1.1 Legalitas usaha', 'sort_order' => 1]);
+        $otherAudit = Company::factory()->create()->audits()->create(['title' => 'Audit checklist lama']);
+        $otherAudit->items()->create(['title' => 'Legalitas perusahaan', 'sort_order' => 1]);
+
+        $this->actingAs(User::factory()->create(['role' => 'admin']))
+            ->get(route('audits.assignments.index'))
+            ->assertOk()
+            ->assertSee('Penugasan auditor')
+            ->assertSee('Audit ISPO demo')
+            ->assertDontSee('Audit checklist lama')
+            ->assertSee(route('audits.show', $audit).'#assignment-panel', false);
+    }
+
+    public function test_lead_auditor_can_open_the_auditor_assignment_menu(): void
+    {
+        $audit = Company::factory()->create()->audits()->create(['title' => 'Audit ISPO lead']);
+        $audit->items()->create(['title' => '1.1.1 Legalitas usaha', 'sort_order' => 1]);
+
+        $this->actingAs(User::factory()->create(['role' => 'lead_audit']))
+            ->get(route('audits.assignments.index'))
+            ->assertOk()
+            ->assertSee('Penugasan auditor')
+            ->assertSee('Audit ISPO lead')
+            ->assertSee(route('audits.show', $audit).'#assignment-panel', false);
+    }
+
+    public function test_auditor_cannot_open_the_auditor_assignment_menu(): void
+    {
+        $auditor = User::factory()->create(['role' => 'auditor']);
+
+        $this->actingAs($auditor)
+            ->get(route('dashboard'))
+            ->assertDontSee('Penugasan auditor');
+
+        $this->get(route('audits.assignments.index'))->assertForbidden();
+    }
+
     public function test_auditor_can_only_update_an_assigned_principle(): void
     {
         $auditor = User::factory()->create(['role' => 'auditor']);

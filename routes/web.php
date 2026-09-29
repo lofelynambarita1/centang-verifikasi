@@ -14,6 +14,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('logout', [AuthController::class, 'destroy'])->name('logout');
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::resource('companies', CompanyController::class);
+    Route::get('audits/assignments', [AuditController::class, 'assignmentsIndex'])
+        ->middleware('role:admin,lead_audit')
+        ->name('audits.assignments.index');
     Route::get('audits/{audit}', [AuditController::class, 'show'])->name('audits.show');
     Route::put('audit-items/{auditItem}', [AuditController::class, 'updateItem'])->name('audit-items.update');
     Route::post('audit-items/{auditItem}/evidence', [AuditController::class, 'storeEvidence'])->name('audit-items.evidence');

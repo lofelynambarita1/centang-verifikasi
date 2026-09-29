@@ -25,7 +25,7 @@
                 </svg>
                 <span>Dashboard</span>
             </a>
-            <a class="app-nav__link @if (request()->routeIs('companies.*') || request()->routeIs('audits.*')) active @endif" href="{{ route('companies.index') }}">
+            <a class="app-nav__link @if (request()->routeIs('companies.*') || (request()->routeIs('audits.*') && !request()->routeIs('audits.assignments.*'))) active @endif" href="{{ route('companies.index') }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M3 21h18"/>
                     <path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/>
@@ -33,6 +33,15 @@
                 </svg>
                 <span>Perusahaan</span>
             </a>
+            @if (auth()->user()?->canManageAssignments())
+                <a class="app-nav__link @if (request()->routeIs('audits.assignments.*')) active @endif" href="{{ route('audits.assignments.index') }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="4" y="3" width="16" height="18" rx="2"/>
+                        <path d="M9 3.5h6M8 9h8M8 13h8M8 17h5"/>
+                    </svg>
+                    <span>Penugasan auditor</span>
+                </a>
+            @endif
             @if (auth()->user()?->isAdmin())
                 <a class="app-nav__link @if (request()->routeIs('users.*')) active @endif" href="{{ route('users.index') }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

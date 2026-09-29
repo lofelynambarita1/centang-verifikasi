@@ -755,18 +755,15 @@ img, svg { vertical-align: middle; }
     border-radius: 22px 22px 0 0;
     background: linear-gradient(90deg, #d63d2f 0%, #d63d2f 25%, #4767c7 50%, #2b3d7a 100%);
 }
-.auth-mark {
-    display: grid;
-    place-items: center;
-    width: 58px;
-    height: 58px;
-    margin: 8px auto 18px;
-    color: #fff;
-    font-size: 26px;
-    font-weight: 800;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #243f7d 0%, #2b4a9d 48%, #d63d2f 100%);
-    box-shadow: 0 18px 28px -18px rgba(31, 51, 128, 0.9);
+.auth-logo {
+    display: block;
+    width: 88px;
+    height: 88px;
+    margin: 0 auto 18px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 10px 24px -14px rgba(31, 51, 128, 0.8);
 }
 .auth-card h1 {
     margin: 0;
@@ -774,11 +771,6 @@ img, svg { vertical-align: middle; }
     font-size: clamp(2rem, 2.5vw, 2.2rem);
     letter-spacing: -.05em;
     text-align: center;
-}
-.auth-card .app-eyebrow {
-    margin-bottom: 14px;
-    text-align: center;
-    letter-spacing: .18em;
 }
 .auth-intro {
     margin: 10px auto 22px;

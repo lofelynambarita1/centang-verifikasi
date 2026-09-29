@@ -19,6 +19,21 @@ use PhpOffice\PhpWord\PhpWord;
 
 class AuditController extends Controller
 {
+    public function assignmentsIndex(): View
+    {
+        $audits = Audit::query()
+            ->with(['company:id,name', 'items:id,audit_id,title'])
+            ->withCount('assignees')
+            ->latest()
+            ->get()
+            ->filter(fn (Audit $audit): bool => $audit->items->contains(
+                fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1,
+            ))
+            ->values();
+
+        return view('audits.assignments', ['audits' => $audits]);
+    }
+
     public function show(Audit $audit): View
     {
         $audit->load(['company', 'findings', 'assignees']);

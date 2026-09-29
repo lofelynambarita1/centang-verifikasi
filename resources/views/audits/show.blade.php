@@ -17,7 +17,7 @@
 
 @section('title', 'Verifikasi Audit | '.$audit->company->name)
 @section('eyebrow', 'VERIFIKASI')
-@section('heading', 'Verifikasi audit')
+@section('heading', 'Verifikasi audit ISPO')
 
 @section('actions')
     <div class="page-actions">
@@ -124,7 +124,7 @@
                 7 => 'Peningkatan usaha berkelanjutan',
             ];
         @endphp
-        <section class="panel panel--pad assignment-panel">
+        <section class="panel panel--pad assignment-panel" id="assignment-panel">
             <div class="panel__head">
                 <div>
                     <h2>Penanggung jawab prinsip</h2>
@@ -335,9 +335,9 @@
         @if ($isIspoChecklist || $items->hasPages())
             <div class="pagination-row">
                 @if ($currentPage <= 1)
-                    <button type="button" class="btn btn--ghost btn--sm" disabled>← Prinsip sebelumnya</button>
+                    <button type="button" class="btn btn--ghost btn--sm" disabled>Prinsip sebelumnya</button>
                 @else
-                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', ['audit' => $audit, 'page' => $currentPage - 1]) }}">← Prinsip sebelumnya</a>
+                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', ['audit' => $audit, 'page' => $currentPage - 1]) }}">Prinsip sebelumnya</a>
                 @endif
 
                 @if ($isIspoChecklist)
@@ -347,9 +347,9 @@
                 @endif
 
                 @if ($currentPage < ($isIspoChecklist ? 7 : $items->lastPage()))
-                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', ['audit' => $audit, 'page' => $currentPage + 1]) }}">Prinsip berikutnya →</a>
+                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', ['audit' => $audit, 'page' => $currentPage + 1]) }}">Prinsip berikutnya</a>
                 @else
-                    <button type="button" class="btn btn--ghost btn--sm" disabled>Prinsip berikutnya →</button>
+                    <button type="button" class="btn btn--ghost btn--sm" disabled>Prinsip berikutnya</button>
                 @endif
             </div>
         @endif
