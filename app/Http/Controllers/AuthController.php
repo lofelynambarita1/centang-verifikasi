@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,37 @@ class AuthController extends Controller
         return view('auth.login');
     }
 
+    public function createRegistration(): View
+    {
+        return view('auth.register');
+    }
+
+    public function storeRegistration(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'role' => ['required', 'in:admin,lead_audit,auditor'],
+        ]);
+
+        User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => $validated['password'],
+            'role' => 'auditor',
+            'requested_role' => $validated['role'],
+        ]);
+
+        $requestedRoleName = match ($validated['role']) {
+            'admin' => 'Admin',
+            'lead_audit' => 'Lead Auditor',
+            default => 'Auditor',
+        };
+
+        return redirect()->route('login')->with('success', "Permintaan akun {$requestedRoleName} dikirim. Akun dapat digunakan setelah disetujui Admin.");
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
@@ -23,6 +55,13 @@ class AuthController extends Controller
 
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             return back()->withErrors(['email' => 'Email atau password tidak sesuai.'])->onlyInput('email');
+        }
+
+        if ($request->user()?->requested_role !== null) {
+            Auth::logout();
+            $request->session()->regenerate();
+
+            return back()->withErrors(['email' => 'Pendaftaran akun Anda masih menunggu persetujuan Admin.'])->onlyInput('email');
         }
 
         $request->session()->regenerate();

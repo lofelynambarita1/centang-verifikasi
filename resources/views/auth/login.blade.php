@@ -11,6 +11,9 @@
     <img class="auth-logo" src="{{ asset('images/logogis.jpeg') }}" alt="Logo GIS">
     <h1>Masuk ke ruang audit</h1>
     <p class="auth-intro">Kelola penugasan prinsip dan proses verifikasi sesuai peran tim Anda.</p>
+    @if (session('success'))
+        <div class="auth-success" role="status">{{ session('success') }}</div>
+    @endif
     @if ($errors->any())
         <div class="form-error" role="alert">{{ $errors->first() }}</div>
     @endif
@@ -27,6 +30,7 @@
         <label class="check-control"><input type="checkbox" name="remember"> Ingat perangkat ini</label>
         <button class="btn btn--primary btn--block" type="submit">Masuk ke dashboard</button>
     </form>
+    <p class="auth-switch">Belum punya akun? <a href="{{ route('register') }}">Daftar akun</a></p>
 </main>
 </body>
 </html>

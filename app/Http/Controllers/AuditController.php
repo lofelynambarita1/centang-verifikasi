@@ -59,7 +59,11 @@ class AuditController extends Controller
             'principles' => $principles,
             'isIspoChecklist' => $isIspoChecklist,
             'currentPage' => $currentPage,
-            'users' => User::query()->whereIn('role', ['lead_audit', 'auditor'])->orderBy('name')->get(),
+            'users' => User::query()
+                ->whereNull('requested_role')
+                ->whereIn('role', ['lead_audit', 'auditor'])
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 

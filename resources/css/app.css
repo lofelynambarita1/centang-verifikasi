@@ -782,7 +782,8 @@ img, svg { vertical-align: middle; }
     min-height: 100vh;
     place-items: center;
     padding: 24px;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     background: var(--app-background);
 }
 .auth-page::before,
@@ -852,6 +853,30 @@ img, svg { vertical-align: middle; }
     font-size: 14.5px;
     line-height: 1.6;
     text-align: center;
+}
+.auth-switch { margin: 20px 0 0; color: var(--muted); font-size: 13.5px; text-align: center; }
+.auth-switch a { color: var(--primary); font-weight: 800; }
+.auth-switch a:hover { text-decoration: underline; }
+.auth-role-note {
+    margin: 0;
+    padding: 11px 13px;
+    border: 1px solid #dce4f2;
+    border-radius: 9px;
+    background: #f3f6fc;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+.auth-success {
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    border: 1px solid #bde3d3;
+    border-radius: 10px;
+    background: var(--success-bg);
+    color: #116b4c;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.5;
 }
 .auth-form {
     gap: 18px;
@@ -1161,19 +1186,20 @@ img, svg { vertical-align: middle; }
 .audit-completion {
     margin-top: 18px;
     padding: 18px 20px;
-    border: 1px solid #d9dfe9;
+    border: 1px solid #24345f;
     border-radius: 12px;
-    background: #edf0f5;
+    background: linear-gradient(125deg, #314779 0%, #263861 58%, #223253 100%);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
     flex-wrap: wrap;
 }
-.audit-completion strong { display: block; font-size: 17px; color: #202a49; }
-.audit-completion span { display: block; margin-top: 4px; color: #515b74; font-size: 14.5px; line-height: 1.55; }
+.audit-completion strong { display: block; font-size: 17px; color: #fff; }
+.audit-completion span { display: block; margin-top: 4px; color: #e1e8f7; font-size: 14.5px; line-height: 1.55; }
 .audit-completion .btn { min-height: 44px; font-size: 14px; }
-.audit-completion .draft-note { color: #515b74; font-size: 14px; }
+.audit-completion .draft-note { color: #d5def1; font-size: 14px; }
+.audit-completion .btn:disabled { opacity: 1; background: #e2e8f2; color: #33466e; border-color: #c8d2e4; }
 .completion-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* =====================================================================

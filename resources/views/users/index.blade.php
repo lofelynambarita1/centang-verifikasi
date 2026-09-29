@@ -18,9 +18,25 @@
                 @foreach ($users as $user)
                     <tr>
                         <td><strong>{{ $user->name }}</strong></td>
-                        <td><span class="role-badge role-badge--{{ $user->role }}">{{ str_replace('_', ' ', ucfirst($user->role)) }}</span></td>
+                        <td>
+                            <span class="role-badge role-badge--{{ $user->role }}">{{ str_replace('_', ' ', ucfirst($user->role)) }}</span>
+                            @if ($user->requested_role)
+                                <div class="cell-meta">Menunggu persetujuan: <strong>{{ str_replace('_', ' ', ucfirst($user->requested_role)) }}</strong></div>
+                            @endif
+                        </td>
                         <td>{{ $user->email }}</td>
-                        <td><div class="cell-actions"><a class="btn btn--ghost btn--sm" href="{{ route('users.edit', $user) }}">Edit</a><form method="POST" action="{{ route('users.destroy', $user) }}" onsubmit="return confirm('Hapus pengguna ini?')">@csrf @method('DELETE')<button class="btn btn--danger btn--sm" type="submit">Hapus</button></form></div></td>
+                        <td>
+                            <div class="cell-actions">
+                                @if ($user->requested_role)
+                                    <form method="POST" action="{{ route('users.approve-role', $user) }}">
+                                        @csrf
+                                        <button class="btn btn--primary btn--sm" type="submit">Setujui role</button>
+                                    </form>
+                                @endif
+                                <a class="btn btn--ghost btn--sm" href="{{ route('users.edit', $user) }}">Edit</a>
+                                <form method="POST" action="{{ route('users.destroy', $user) }}" onsubmit="return confirm('Hapus pengguna ini?')">@csrf @method('DELETE')<button class="btn btn--danger btn--sm" type="submit">Hapus</button></form>
+                            </div>
+                        </td>
                     </tr>
                 @endforeach
                 </tbody>

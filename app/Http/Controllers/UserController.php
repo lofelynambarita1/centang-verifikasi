@@ -15,7 +15,7 @@ class UserController extends Controller
      */
     public function index(): View
     {
-        return view('users.index', ['users' => User::query()->orderBy('name')->get()]);
+        return view('users.index', ['users' => User::query()->orderByRaw('requested_role IS NULL')->orderBy('name')->get()]);
     }
 
     public function create(): View
@@ -43,9 +43,20 @@ class UserController extends Controller
             unset($data['password']);
         }
 
+        $data['requested_role'] = null;
         $user->update($data);
 
         return redirect()->route('users.index')->with('success', 'Data pengguna diperbarui.');
+    }
+
+    public function approveRoleRequest(User $user): RedirectResponse
+    {
+        abort_if($user->requested_role === null, 422, 'Tidak ada permintaan role yang perlu disetujui.');
+
+        $requestedRole = $user->requested_role;
+        $user->update(['role' => $requestedRole, 'requested_role' => null]);
+
+        return redirect()->route('users.index')->with('success', 'Permintaan role berhasil disetujui.');
     }
 
     public function destroy(User $user): RedirectResponse

@@ -23,6 +23,83 @@ class AuthAndAssignmentTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_public_registration_requests_a_role_and_waits_for_admin_approval(): void
+    {
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertSee('Belum punya akun?')
+            ->assertSee(route('register'));
+
+        $this->post(route('register.store'), [
+            'name' => 'Auditor Baru',
+            'email' => 'auditor.baru@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'role' => 'admin',
+        ])->assertRedirect(route('login'));
+
+        $this->assertDatabaseHas('users', [
+            'name' => 'Auditor Baru',
+            'email' => 'auditor.baru@example.com',
+            'role' => 'auditor',
+            'requested_role' => 'admin',
+        ]);
+
+        $this->from(route('login'))->post(route('login.store'), [
+            'email' => 'auditor.baru@example.com',
+            'password' => 'password123',
+        ])->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+
+        $this->actingAs(User::factory()->create(['role' => 'admin']))
+            ->get(route('users.index'))
+            ->assertOk()
+            ->assertSee('Menunggu persetujuan:')
+            ->assertSee('<strong>Admin</strong>', false)
+            ->assertSee('Setujui role');
+
+        $this->post(route('users.approve-role', User::where('email', 'auditor.baru@example.com')->firstOrFail()))
+            ->assertRedirect(route('users.index'));
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'auditor.baru@example.com',
+            'role' => 'admin',
+            'requested_role' => null,
+        ]);
+
+        $this->post(route('login.store'), [
+            'email' => 'auditor.baru@example.com',
+            'password' => 'password123',
+        ])->assertRedirect(route('dashboard'));
+    }
+
+    public function test_registration_page_explains_the_available_role(): void
+    {
+        $this->get(route('register'))
+            ->assertOk()
+            ->assertSee('Ajukan akun')
+            ->assertSee('Lead Auditor')
+            ->assertSee('Admin')
+            ->assertSee('Persetujuan Admin diperlukan.');
+    }
+
+    public function test_non_admin_cannot_approve_a_requested_role(): void
+    {
+        $user = User::factory()->create(['role' => 'auditor', 'requested_role' => 'lead_audit']);
+
+        $this->actingAs(User::factory()->create(['role' => 'lead_audit']))
+            ->post(route('users.approve-role', $user))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'role' => 'auditor',
+            'requested_role' => 'lead_audit',
+        ]);
+    }
+
     public function test_lead_can_assign_multiple_auditors_to_one_principle(): void
     {
         $lead = User::factory()->create(['role' => 'lead_audit']);

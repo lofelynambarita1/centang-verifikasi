@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('login', [AuthController::class, 'create'])->name('login');
 Route::post('login', [AuthController::class, 'store'])->name('login.store');
+Route::get('register', [AuthController::class, 'createRegistration'])->name('register');
+Route::post('register', [AuthController::class, 'storeRegistration'])->name('register.store');
 
 Route::middleware('auth')->group(function (): void {
     Route::post('logout', [AuthController::class, 'destroy'])->name('logout');
@@ -30,5 +32,8 @@ Route::middleware('auth')->group(function (): void {
     Route::put('audits/{audit}/assignments', [AuditController::class, 'assignPrinciples'])
         ->middleware('role:admin,lead_audit')
         ->name('audits.assignments.update');
+    Route::post('users/{user}/approve-role', [UserController::class, 'approveRoleRequest'])
+        ->middleware('role:admin')
+        ->name('users.approve-role');
     Route::resource('users', UserController::class)->except('show')->middleware('role:admin');
 });
