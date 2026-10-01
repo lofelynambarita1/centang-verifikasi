@@ -33,6 +33,16 @@
                 </svg>
                 <span>Perusahaan</span>
             </a>
+            <a class="app-nav__link @if (request()->routeIs('notifications.*')) active @endif" href="{{ route('notifications.index') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/>
+                    <path d="M10 21h4"/>
+                </svg>
+                <span>Notifikasi</span>
+                @if ($unreadNotificationCount > 0)
+                    <span class="app-nav__badge">{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
+                @endif
+            </a>
             @if (auth()->user()?->canManageAssignments())
                 <a class="app-nav__link @if (request()->routeIs('audits.assignments.*')) active @endif" href="{{ route('audits.assignments.index') }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

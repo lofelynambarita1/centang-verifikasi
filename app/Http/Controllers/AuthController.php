@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Notifications\AuditSystemNotification;
+use App\Support\NotificationDispatcher;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -20,7 +22,7 @@ class AuthController extends Controller
         return view('auth.register');
     }
 
-    public function storeRegistration(Request $request): RedirectResponse
+    public function storeRegistration(Request $request, NotificationDispatcher $notifications): RedirectResponse
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -29,7 +31,7 @@ class AuthController extends Controller
             'role' => ['required', 'in:admin,lead_audit,auditor'],
         ]);
 
-        User::create([
+        $newUser = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => $validated['password'],
@@ -42,6 +44,18 @@ class AuthController extends Controller
             'lead_audit' => 'Lead Auditor',
             default => 'Auditor',
         };
+
+        $admins = User::query()
+            ->where('role', 'admin')
+            ->whereNull('requested_role')
+            ->get();
+
+        $notifications->send($admins, new AuditSystemNotification(
+            'role_request',
+            'Permintaan role baru',
+            "{$newUser->name} mengajukan role {$requestedRoleName}.",
+            route('users.index', [], false),
+        ));
 
         return redirect()->route('login')->with('success', "Permintaan akun {$requestedRoleName} dikirim. Akun dapat digunakan setelah disetujui Admin.");
     }

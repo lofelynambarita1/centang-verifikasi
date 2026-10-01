@@ -132,7 +132,18 @@ class AuthAndAssignmentTest extends TestCase
             ->assertSee('Penugasan auditor')
             ->assertSee('Audit ISPO demo')
             ->assertDontSee('Audit checklist lama')
-            ->assertSee(route('audits.show', $audit).'#assignment-panel', false);
+            ->assertSee(route('audits.assignments.edit', $audit), false);
+
+        $this->get(route('audits.assignments.edit', $audit))
+            ->assertOk()
+            ->assertSee('Kepatuhan terhadap peraturan')
+            ->assertSee('Simpan penugasan');
+
+        $this->get(route('audits.show', $audit))
+            ->assertDontSee('Simpan penugasan');
+
+        $this->get(route('audits.assignments.edit', $otherAudit))
+            ->assertNotFound();
     }
 
     public function test_lead_auditor_can_open_the_auditor_assignment_menu(): void
@@ -145,7 +156,7 @@ class AuthAndAssignmentTest extends TestCase
             ->assertOk()
             ->assertSee('Penugasan auditor')
             ->assertSee('Audit ISPO lead')
-            ->assertSee(route('audits.show', $audit).'#assignment-panel', false);
+            ->assertSee(route('audits.assignments.edit', $audit), false);
     }
 
     public function test_auditor_cannot_open_the_auditor_assignment_menu(): void
@@ -157,6 +168,16 @@ class AuthAndAssignmentTest extends TestCase
             ->assertDontSee('Penugasan auditor');
 
         $this->get(route('audits.assignments.index'))->assertForbidden();
+    }
+
+    public function test_auditor_cannot_open_audit_principle_assignments(): void
+    {
+        $audit = Company::factory()->create()->audits()->create(['title' => 'Audit ISPO demo']);
+        $audit->items()->create(['title' => '1.1.1 Legalitas usaha', 'sort_order' => 1]);
+
+        $this->actingAs(User::factory()->create(['role' => 'auditor']))
+            ->get(route('audits.assignments.edit', $audit))
+            ->assertForbidden();
     }
 
     public function test_auditor_can_only_update_an_assigned_principle(): void

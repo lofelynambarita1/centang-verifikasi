@@ -41,7 +41,7 @@
                             </td>
                             <td>
                                 <div class="cell-actions">
-                                    <a class="btn btn--primary btn--sm" href="{{ route('audits.show', $audit) }}#assignment-panel">Atur 7 prinsip</a>
+                                    <a class="btn btn--primary btn--sm" href="{{ route('audits.assignments.edit', $audit) }}">Atur penanggung jawab</a>
                                 </div>
                             </td>
                         </tr>

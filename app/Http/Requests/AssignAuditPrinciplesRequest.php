@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class AssignAuditPrinciplesRequest extends FormRequest
 {
@@ -26,7 +27,7 @@ class AssignAuditPrinciplesRequest extends FormRequest
             'assignments' => ['required', 'array'],
             'assignments.*.principle' => ['required', 'integer', 'between:1,7'],
             'assignments.*.users' => ['nullable', 'array'],
-            'assignments.*.users.*' => ['integer', 'exists:users,id'],
+            'assignments.*.users.*' => ['integer', Rule::exists('users', 'id')->whereNull('requested_role')],
         ];
     }
 }

@@ -4,6 +4,7 @@ use App\Http\Controllers\AuditController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,11 +15,17 @@ Route::post('register', [AuthController::class, 'storeRegistration'])->name('reg
 
 Route::middleware('auth')->group(function (): void {
     Route::post('logout', [AuthController::class, 'destroy'])->name('logout');
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+    Route::post('notifications/{notificationId}/read', [NotificationController::class, 'read'])->name('notifications.read');
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::resource('companies', CompanyController::class);
     Route::get('audits/assignments', [AuditController::class, 'assignmentsIndex'])
         ->middleware('role:admin,lead_audit')
         ->name('audits.assignments.index');
+    Route::get('audits/{audit}/assignments', [AuditController::class, 'assignmentsEdit'])
+        ->middleware('role:admin,lead_audit')
+        ->name('audits.assignments.edit');
     Route::get('audits/{audit}', [AuditController::class, 'show'])->name('audits.show');
     Route::put('audit-items/{auditItem}', [AuditController::class, 'updateItem'])->name('audit-items.update');
     Route::post('audit-items/{auditItem}/evidence', [AuditController::class, 'storeEvidence'])->name('audit-items.evidence');

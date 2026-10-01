@@ -116,9 +116,16 @@
     <div class="dash-grid">
         <section class="panel panel--pad" id="company-progress">
             <div class="panel__head">
-                <div>
-                    <h2>Progres Verifikasi Perusahaan</h2>
-                    <p>Status verifikasi per auditee</p>
+                <div class="dashboard-section-heading">
+                    <span class="dashboard-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h2>Progres Verifikasi Perusahaan</h2>
+                        <p>Status verifikasi per auditee</p>
+                    </div>
                 </div>
                 <a class="panel__link" href="{{ route('companies.index') }}">Kelola perusahaan</a>
             </div>
@@ -196,9 +203,17 @@
         <aside class="dash-side">
             <div class="panel panel--pad" id="indicator-summary">
                 <div class="panel__head">
-                    <div>
-                        <h2>Status Seluruh Indikator</h2>
-                        <p>Total keseluruhan penilaian</p>
+                    <div class="dashboard-section-heading dashboard-section-heading--center">
+                        <span class="dashboard-section-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3v9l7.8 4.5"/>
+                                <circle cx="12" cy="12" r="9"/>
+                            </svg>
+                        </span>
+                        <div>
+                            <h2>Status Seluruh Indikator</h2>
+                            <p>Total keseluruhan penilaian</p>
+                        </div>
                     </div>
                 </div>
                 <div class="donut">
@@ -219,9 +234,17 @@
 
             <div class="panel panel--pad" id="recent-audits">
                 <div class="panel__head">
-                    <div>
-                        <h2>Audit terkini</h2>
-                        <p>Kegiatan verifikasi terakhir</p>
+                    <div class="dashboard-section-heading dashboard-section-heading--center">
+                        <span class="dashboard-section-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="9"/>
+                                <path d="M12 7v5l3 2"/>
+                            </svg>
+                        </span>
+                        <div>
+                            <h2>Audit terkini</h2>
+                            <p>Kegiatan verifikasi terakhir</p>
+                        </div>
                     </div>
                 </div>
                 <div class="feed">

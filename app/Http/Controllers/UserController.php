@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
+use App\Notifications\AuditSystemNotification;
+use App\Support\NotificationDispatcher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -35,9 +37,10 @@ class UserController extends Controller
         return view('users.edit', compact('user'));
     }
 
-    public function update(UpdateUserRequest $request, User $user): RedirectResponse
+    public function update(UpdateUserRequest $request, User $user, NotificationDispatcher $notifications): RedirectResponse
     {
         $data = $request->safe()->except('password_confirmation');
+        $hasRoleRequest = $user->requested_role !== null;
 
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
@@ -46,15 +49,31 @@ class UserController extends Controller
         $data['requested_role'] = null;
         $user->update($data);
 
+        if ($hasRoleRequest) {
+            $notifications->send([$user], new AuditSystemNotification(
+                'role_approved',
+                'Permintaan role disetujui',
+                'Admin telah mengaktifkan akun Anda dengan role '.str_replace('_', ' ', ucfirst($user->role)).'.',
+                route('dashboard', [], false),
+            ));
+        }
+
         return redirect()->route('users.index')->with('success', 'Data pengguna diperbarui.');
     }
 
-    public function approveRoleRequest(User $user): RedirectResponse
+    public function approveRoleRequest(User $user, NotificationDispatcher $notifications): RedirectResponse
     {
         abort_if($user->requested_role === null, 422, 'Tidak ada permintaan role yang perlu disetujui.');
 
         $requestedRole = $user->requested_role;
         $user->update(['role' => $requestedRole, 'requested_role' => null]);
+
+        $notifications->send([$user], new AuditSystemNotification(
+            'role_approved',
+            'Permintaan role disetujui',
+            'Admin telah mengaktifkan akun Anda dengan role '.str_replace('_', ' ', ucfirst($requestedRole)).'.',
+            route('dashboard', [], false),
+        ));
 
         return redirect()->route('users.index')->with('success', 'Permintaan role berhasil disetujui.');
     }
