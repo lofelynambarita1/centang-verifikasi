@@ -6,6 +6,7 @@ use App\Models\AuditProject;
 use App\Models\AuditTemplate;
 use App\Models\Company;
 use App\Models\User;
+use App\Services\TemplateJsonImporter;
 use App\Services\TemplateSnapshotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
@@ -107,6 +108,36 @@ class AuditProjectSnapshotTest extends TestCase
             'user_id' => $admin->id,
             'activity' => 'template.snapshot_created',
         ]);
+    }
+
+    public function test_creating_a_project_from_the_ispo_master_copies_the_complete_immutable_snapshot(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $template = app(TemplateJsonImporter::class)->importFromConfig();
+
+        $project = $this->createProject($admin, $lead, $template);
+
+        $this->assertSame(7, $project->snapshotPrinciples()->count());
+        $this->assertSame(49, $project->snapshotSections()->count());
+        $this->assertSame(133, $project->snapshotIndicators()->count());
+        $this->assertSame(350, $project->snapshotParameters()->count());
+
+        $masterPrinciple = $template->principles()->where('code', '1')->firstOrFail();
+        $projectPrinciple = $project->snapshotPrinciples()->where('code', '1')->firstOrFail();
+        $this->assertSame($masterPrinciple->title, $projectPrinciple->title);
+
+        $projectIndicator = $project->snapshotIndicators()
+            ->where('code', '1.1.1')
+            ->with('section', 'parameters')
+            ->firstOrFail();
+        $this->assertSame('1.1', $projectIndicator->section->code);
+        $this->assertSame(3, $projectIndicator->parameters->count());
+
+        $projectPrincipleTitle = $projectPrinciple->title;
+        $masterPrinciple->update(['title' => 'Judul Master Berubah']);
+
+        $this->assertSame($projectPrincipleTitle, $projectPrinciple->refresh()->title);
     }
 
     public function test_snapshot_preserves_sort_order_of_all_levels(): void

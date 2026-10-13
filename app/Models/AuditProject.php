@@ -26,6 +26,7 @@ class AuditProject extends Model
         'audit_start_date',
         'audit_end_date',
         'land_area',
+        'assessment_summary',
         'status',
         'created_by',
     ];

@@ -14,7 +14,7 @@ class RemoveAuditEvidenceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'removal_reason' => ['required', 'string', 'min:3', 'max:500'],
+            'removal_reason' => ['nullable', 'string', 'max:500'],
         ];
     }
 }

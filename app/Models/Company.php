@@ -20,4 +20,9 @@ class Company extends Model
     {
         return $this->hasMany(Audit::class);
     }
+
+    public function auditProjects(): HasMany
+    {
+        return $this->hasMany(AuditProject::class);
+    }
 }

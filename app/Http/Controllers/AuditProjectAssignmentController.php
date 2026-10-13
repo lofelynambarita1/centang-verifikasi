@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\AutoAssignmentRequest;
+use App\Enums\ProjectRole;
 use App\Http\Requests\BulkAssignmentRequest;
 use App\Http\Requests\StoreAssignmentRequest;
 use App\Models\AuditProject;
@@ -14,6 +14,7 @@ use App\Services\AuditProgressService;
 use App\Support\StructureTree;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class AuditProjectAssignmentController extends Controller
 {
@@ -28,27 +29,108 @@ class AuditProjectAssignmentController extends Controller
      */
     public function index(AuditProject $auditProject): View
     {
-        $this->authorize('view', $auditProject);
+        $this->authorize('manageAssignments', $auditProject);
 
         $project = $auditProject->load('template', 'company', 'leadMember.user', 'members.user');
+        $tree = $this->tree->fromProject($project);
 
         $indicatorCount = $project->snapshotIndicators()->count();
         $assignedCount = $project->assignments()->count();
+        $principleSummaries = $this->principleAssignmentSummaries($project);
+        $principleWorkloads = $project->members->map(function ($member) use ($principleSummaries) {
+            $member->setAttribute('principles_count', collect($principleSummaries)
+                ->filter(fn (array $summary): bool => $summary['primary_pic_id'] === $member->user_id)
+                ->count());
+
+            return $member;
+        });
 
         return view('audit-projects.assignments', [
             'project' => $project,
-            'tree' => $this->tree->fromProject($project),
+            'tree' => $tree,
+            'principleNodes' => collect($tree)->mapWithKeys(
+                fn (array $node): array => [$node['model']->id => $node],
+            ),
+            'principleSummaries' => $principleSummaries,
             'members' => $project->members,
             'workloads' => $this->assignments->workloads($project),
+            'principleWorkloads' => $principleWorkloads,
             'stats' => [
                 'total' => $indicatorCount,
                 'assigned' => $assignedCount,
                 'unassigned' => $indicatorCount - $assignedCount,
+                'total_principles' => count($principleSummaries),
+                'assigned_principles' => count(array_filter($principleSummaries, fn (array $summary): bool => $summary['primary_pic_id'] !== null)),
+                'unassigned_principles' => count(array_filter($principleSummaries, fn (array $summary): bool => $summary['primary_pic_id'] === null)),
             ],
             'indicatorCountsBySection' => $this->subtreeIndicatorCounts($project),
             'indicatorCountsByPrinciple' => $this->indicatorCountsByPrinciple($project),
             'canManage' => auth()->user()->can('manageAssignments', $project),
         ]);
+    }
+
+    /**
+     * Build the compact, principle-level assignment view without changing the
+     * indicator-level assignment source of truth.
+     *
+     * @return array<int, array{total: int, assigned: int, unassigned: int, primary_pic_id: ?int, pic_counts: array<int, array{name: string, total: int}>, exceptions: int}>
+     */
+    private function principleAssignmentSummaries(AuditProject $project): array
+    {
+        $summaries = [];
+
+        foreach ($project->snapshotPrinciples()->get(['id']) as $principle) {
+            $summaries[$principle->id] = [
+                'total' => 0,
+                'assigned' => 0,
+                'unassigned' => 0,
+                'primary_pic_id' => null,
+                'pic_counts' => [],
+                'exceptions' => 0,
+            ];
+        }
+
+        $indicators = $project->snapshotIndicators()
+            ->with([
+                'section:id,audit_project_id,audit_project_principle_id',
+                'assignment.pic:id,name',
+            ])
+            ->get();
+
+        foreach ($indicators as $indicator) {
+            $principleId = $indicator->section?->audit_project_principle_id;
+
+            if ($principleId === null || ! isset($summaries[$principleId])) {
+                continue;
+            }
+
+            $summary = &$summaries[$principleId];
+            $summary['total']++;
+
+            $pic = $indicator->assignment?->pic;
+
+            if ($pic === null) {
+                $summary['unassigned']++;
+                unset($pic);
+
+                continue;
+            }
+
+            $summary['assigned']++;
+            $summary['pic_counts'][$pic->id] ??= ['name' => $pic->name, 'total' => 0];
+            $summary['pic_counts'][$pic->id]['total']++;
+            unset($pic);
+        }
+
+        foreach ($summaries as &$summary) {
+            uasort($summary['pic_counts'], fn (array $left, array $right): int => $right['total'] <=> $left['total']);
+            $primary = array_key_first($summary['pic_counts']);
+            $summary['primary_pic_id'] = $primary !== null ? (int) $primary : null;
+            $summary['exceptions'] = max(0, count($summary['pic_counts']) - 1);
+        }
+        unset($summary);
+
+        return $summaries;
     }
 
     /**
@@ -87,15 +169,21 @@ class AuditProjectAssignmentController extends Controller
     /**
      * Automatically distribute all currently unassigned indicators.
      */
-    public function autoAssign(AutoAssignmentRequest $request, AuditProject $auditProject): RedirectResponse
+    public function autoAssign(Request $request, AuditProject $auditProject): RedirectResponse
     {
         $this->authorize('manageAssignments', $auditProject);
 
-        $picUserIds = $request->collect('pic_user_ids')->map(fn ($id): int => (int) $id)->all();
+        $summary = $this->assignments->autoAssign($auditProject, $request->user());
+        $participantCount = $auditProject->members()
+            ->whereIn('project_role', [ProjectRole::LeadAuditor->value, ProjectRole::Auditor->value])
+            ->count();
 
-        $count = $this->assignments->autoAssign($auditProject, $picUserIds, $request->user());
-
-        return back()->with('success', sprintf('%d indikator dibagi otomatis ke auditor terpilih.', $count));
+        return back()->with(
+            'success',
+            $summary['principles'] > 0
+                ? sprintf('%d Prinsip berhasil dibagi ke %d auditor. %d indikator telah memiliki PIC.', $summary['principles'], $participantCount, $summary['indicators'])
+                : 'Semua prinsip sudah memiliki pembagian atau pengecualian.',
+        );
     }
 
     /**

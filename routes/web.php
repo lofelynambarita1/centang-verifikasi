@@ -6,6 +6,7 @@ use App\Http\Controllers\AuditProjectAssignmentController;
 use App\Http\Controllers\AuditProjectController;
 use App\Http\Controllers\AuditProjectMemberController;
 use App\Http\Controllers\AuditProjectStructureController;
+use App\Http\Controllers\AuditReportController;
 use App\Http\Controllers\AuditTemplateController;
 use App\Http\Controllers\AuditWorkspaceController;
 use App\Http\Controllers\Auth\LoginController;
@@ -19,7 +20,7 @@ Route::middleware('guest')->group(function (): void {
     Route::post('login', [LoginController::class, 'store'])->name('login.store');
 });
 
-Route::middleware('auth')->group(function (): void {
+Route::middleware(['auth', 'no-cache'])->group(function (): void {
     Route::post('logout', [LoginController::class, 'destroy'])->name('logout');
 
     /** Legacy verification workflow (kept intact, now behind authentication). */
@@ -49,9 +50,11 @@ Route::middleware('auth')->group(function (): void {
     Route::put('audit-projects/{auditProject}', [AuditProjectController::class, 'update'])
         ->middleware('can:update,auditProject')
         ->name('audit-projects.update');
+    Route::patch('audit-projects/{auditProject}/assessment-summary', [AuditProjectController::class, 'updateAssessmentSummary'])
+        ->name('audit-projects.assessment-summary.update');
 
     Route::get('audit-projects/{auditProject}/team', [AuditProjectMemberController::class, 'index'])
-        ->middleware('can:view,auditProject')
+        ->middleware('can:manageMembers,auditProject')
         ->name('audit-projects.team');
     Route::post('audit-projects/{auditProject}/members', [AuditProjectMemberController::class, 'store'])
         ->middleware('can:manageMembers,auditProject')
@@ -59,11 +62,23 @@ Route::middleware('auth')->group(function (): void {
     Route::put('audit-projects/{auditProject}/lead-auditor', [AuditProjectMemberController::class, 'replaceLead'])
         ->middleware('can:manageMembers,auditProject')
         ->name('audit-projects.lead-auditor.replace');
+    Route::post('audit-projects/{auditProject}/team/complete', [AuditProjectMemberController::class, 'complete'])
+        ->middleware('can:manageMembers,auditProject')
+        ->name('audit-projects.team.complete');
     Route::delete('audit-projects/{auditProject}/members/{member}', [AuditProjectMemberController::class, 'destroy'])
         ->middleware('can:manageMembers,auditProject')
         ->name('audit-projects.members.destroy');
 
     Route::resource('audit-projects', AuditProjectController::class)->only(['index', 'show']);
+    Route::get('audit-projects/{auditProject}/report/preview', [AuditReportController::class, 'preview'])
+        ->middleware('can:view,auditProject')
+        ->name('audit-projects.report.preview');
+    Route::get('audit-projects/{auditProject}/report/pdf', [AuditReportController::class, 'pdf'])
+        ->middleware('can:view,auditProject')
+        ->name('audit-projects.report.pdf');
+    Route::get('audit-projects/{auditProject}/report/word', [AuditReportController::class, 'downloadWord'])
+        ->middleware('can:view,auditProject')
+        ->name('audit-projects.report.word');
     Route::get('audit-projects/{auditProject}/progress', [AuditProjectController::class, 'progress'])
         ->middleware('can:viewProgress,auditProject')
         ->name('audit-projects.progress');
@@ -107,7 +122,7 @@ Route::middleware('auth')->group(function (): void {
 
     /** Indicator assignment (Pembagian Auditor). */
     Route::get('audit-projects/{auditProject}/assignments', [AuditProjectAssignmentController::class, 'index'])
-        ->middleware('can:view,auditProject')
+        ->middleware('can:manageAssignments,auditProject')
         ->name('audit-projects.assignments');
     Route::post('audit-projects/{auditProject}/assignments/indicator/{indicator}', [AuditProjectAssignmentController::class, 'store'])
         ->middleware('can:manageAssignments,auditProject')
@@ -118,6 +133,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('audit-projects/{auditProject}/assignments/auto', [AuditProjectAssignmentController::class, 'autoAssign'])
         ->middleware('can:manageAssignments,auditProject')
         ->name('audit-projects.assignments.auto');
+    Route::post('audit-projects/{auditProject}/start', [AuditProjectController::class, 'start'])
+        ->middleware('can:manageAssignments,auditProject')
+        ->name('audit-projects.start');
 
     /** Auditor's own indicators. */
     Route::get('audit-projects/{auditProject}/my-work', [AuditProjectAssignmentController::class, 'myWork'])
@@ -152,10 +170,18 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('can:review,indicator')
         ->scopeBindings()
         ->name('audit-projects.work.review.approve');
+    Route::post('audit-projects/{auditProject}/work/{indicator}/finalize-own-indicator', [AuditWorkspaceController::class, 'finalizeOwnIndicator'])
+        ->middleware('can:finalize,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.work.finalize-own-indicator');
     Route::post('audit-projects/{auditProject}/work/{indicator}/evidences', [AuditEvidenceController::class, 'store'])
         ->middleware('can:update,indicator')
         ->scopeBindings()
         ->name('audit-projects.evidences.store');
+    Route::post('audit-projects/{auditProject}/work/{indicator}/editor-images', [AuditEvidenceController::class, 'storeEditorImage'])
+        ->middleware('can:update,indicator')
+        ->scopeBindings()
+        ->name('audit-projects.evidences.editor-images.store');
     Route::get('audit-projects/{auditProject}/work/{indicator}/evidences/{evidence}/download', [AuditEvidenceController::class, 'download'])
         ->middleware('can:view,evidence')
         ->scopeBindings()

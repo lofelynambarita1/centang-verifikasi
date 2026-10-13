@@ -25,6 +25,11 @@ class AuditProjectPolicy
         return $user->system_role->isAdminOrAbove() || $project->userIsLead($user);
     }
 
+    public function updateAssessmentSummary(User $user, AuditProject $project): bool
+    {
+        return $project->userIsLead($user);
+    }
+
     /**
      * Determine whether the user can create projects.
      */

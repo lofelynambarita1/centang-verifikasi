@@ -4,20 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light">
-    <title>@yield('title', 'Masuk | Collaborative Audit Report')</title>
+    <title>@yield('title', 'Masuk | Verifikasi ISPO')</title>
+    <link rel="icon" type="image/png" href="https://absen-gis-group.id/uploads/company_logo_1777657909.png?v=1777657909">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="guest-page">
     <div class="guest-shell">
         <div class="guest-card">
             <div class="guest-brand">
-                <span class="app-brand__mark" aria-hidden="true">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M20 6L9 17l-5-5"/>
-                    </svg>
+                <span class="app-brand__mark">
+                    <img src="https://absen-gis-group.id/uploads/company_logo_1777657909.png?v=1777657909" alt="Logo perusahaan">
                 </span>
-                <strong>Centang Verifikasi</strong>
-                <small>Collaborative Audit Report System</small>
+                <strong>Verifikasi ISPO</strong>
+                <small>Sistem Verifikasi ISPO</small>
             </div>
 
             @if (session('status'))

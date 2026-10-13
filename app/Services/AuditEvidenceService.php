@@ -153,7 +153,7 @@ class AuditEvidenceService
         AuditProjectIndicator $indicator,
         AuditIndicatorEvidence $evidence,
         User $actor,
-        string $reason,
+        ?string $reason = null,
     ): AuditIndicatorEvidence {
         return DB::transaction(function () use ($project, $indicator, $evidence, $actor, $reason): AuditIndicatorEvidence {
             $lockedEvidence = AuditIndicatorEvidence::query()
@@ -171,16 +171,19 @@ class AuditEvidenceService
                 'lifecycle_status' => AuditEvidenceLifecycleStatus::Removed,
                 'removed_at' => now(),
                 'removed_by' => $actor->id,
-                'removal_reason' => $reason,
+                'removal_reason' => $reason ?: null,
             ]);
+            $description = $lockedEvidence->original_name
+                ? sprintf('Evidence "%s" dihapus oleh %s.', $lockedEvidence->original_name, $actor->name)
+                : sprintf('Evidence dihapus oleh %s.', $actor->name);
             $project->activityLogs()->create([
                 'user_id' => $actor->id,
                 'activity' => 'audit_evidence.removed',
-                'description' => 'Evidence dihapus secara logis untuk '.$indicator->code.'.',
+                'description' => $description,
                 'meta' => [
                     'evidence_id' => $lockedEvidence->id,
                     'indicator_id' => $indicator->id,
-                    'removal_reason' => $reason,
+                    'removal_reason' => $reason ?: null,
                 ],
             ]);
 

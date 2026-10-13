@@ -1,107 +1,438 @@
 @extends('layouts.app')
 
-@php
-    $avatarColors = ['avatar--coral', 'avatar--navy', 'avatar--mint', 'avatar--amber', 'avatar--violet'];
-    $initials = function (string $name): string {
-        $words = array_values(array_filter(preg_split('/[\s]+/', trim($name))));
-        $chars = array_map(fn ($word) => strtoupper(substr($word, 0, 1)), array_slice($words, 0, 2));
-
-        return $chars ? implode('', $chars) : '?';
-    };
-@endphp
-
-@section('title', $company->name.' | Verifikasi Audit ISPO')
+@section('title', $company->name . ' | Verifikasi Audit ISPO')
 @section('eyebrow', 'PERUSAHAAN')
-@section('heading', 'Detail perusahaan')
+@section('heading', 'Detail Perusahaan')
 
 @section('actions')
-    <a class="btn btn--ghost" href="{{ route('companies.index') }}">← Kembali</a>
-    <a class="btn btn--primary" href="{{ route('companies.edit', $company) }}">Edit data</a>
+    <a class="btn-ghost" href="{{ route('companies.index') }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Kembali</span>
+    </a>
+    <a class="btn-primary" href="{{ route('companies.edit', $company) }}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+        <span>Edit Data</span>
+    </a>
 @endsection
 
 @section('content')
-    <section class="hero">
-        <div class="hero__head">
-            <div>
-                <div class="hero__title">{{ $company->name }}</div>
-                <div class="hero__sub">{{ $company->industry ?: 'Bidang usaha belum diisi' }}</div>
+    <style>
+        /* Profile Hero Card */
+        .company-hero-card {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1.75rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        .company-hero-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.25rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #f1f5f9;
+            margin-bottom: 1.5rem;
+        }
+
+        .company-hero-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 0.625rem;
+            background-color: #059669;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+            flex-shrink: 0;
+            box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
+        }
+
+        .company-hero-title-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .company-hero-title {
+            font-size: 1.375rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0;
+            line-height: 1.3;
+        }
+
+        .company-badge-industry {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.625rem;
+            background-color: #ecfdf5;
+            color: #047857;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border-radius: 0.375rem;
+            width: fit-content;
+        }
+
+        /* Metadata Grid */
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1.25rem 2rem;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .meta-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-value {
+            font-size: 0.9375rem;
+            color: #1e293b;
+            font-weight: 500;
+            word-break: break-word;
+        }
+
+        .text-muted {
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        /* Panel Structure */
+        .data-card-panel {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            background-color: #ffffff;
+        }
+
+        .panel-title {
+            font-size: 1.0625rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0 0 0.25rem 0;
+        }
+
+        .panel-desc {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin: 0;
+        }
+
+        /* Table Styling */
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .custom-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.875rem;
+        }
+
+        .custom-table th {
+            background-color: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            padding: 0.875rem 1.25rem;
+            border-bottom: 1px solid #e2e8f0;
+            white-space: nowrap;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .custom-table td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+            color: #1e293b;
+        }
+
+        .custom-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .custom-table tbody tr:hover {
+            background-color: #f8fafc;
+        }
+
+        /* Action Link */
+        .link-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            color: #059669;
+            font-weight: 600;
+            text-decoration: none;
+            transition: color 0.15s ease-in-out;
+        }
+
+        .link-action:hover {
+            color: #047857;
+            text-decoration: underline;
+        }
+
+        /* Buttons Styling */
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background-color: #059669;
+            color: #ffffff;
+            font-size: 0.875rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: background-color 0.15s ease-in-out;
+        }
+
+        .btn-primary:hover {
+            background-color: #047857;
+        }
+
+        .btn-ghost {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.875rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #475569;
+            background-color: transparent;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            transition: all 0.15s ease-in-out;
+        }
+
+        .btn-ghost:hover {
+            background-color: #f8fafc;
+            color: #0f172a;
+            border-color: #94a3b8;
+        }
+
+        /* Empty State */
+        .empty-container {
+            padding: 3.5rem 1.5rem;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .empty-icon-wrap {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background-color: #f1f5f9;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        .empty-desc {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin: 0;
+            max-width: 380px;
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 768px) {
+            .meta-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .company-hero-card {
+                padding: 1.25rem;
+            }
+
+            .custom-table, .custom-table thead, .custom-table tbody, .custom-table th, .custom-table td, .custom-table tr {
+                display: block;
+            }
+
+            .custom-table thead {
+                display: none;
+            }
+
+            .custom-table tbody tr {
+                margin-bottom: 1rem;
+                border: 1px solid #e2e8f0;
+                border-radius: 0.625rem;
+                padding: 1rem;
+                background-color: #ffffff;
+            }
+
+            .custom-table td {
+                padding: 0.5rem 0;
+                border-bottom: 1px dashed #f1f5f9;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .custom-table td:last-child {
+                border-bottom: none;
+                padding-top: 0.75rem;
+            }
+
+            .custom-table td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                font-size: 0.75rem;
+                color: #64748b;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-right: 1rem;
+            }
+        }
+    </style>
+
+    <!-- Profile Hero Card -->
+    <section class="company-hero-card">
+        <div class="company-hero-header">
+            <div class="company-hero-avatar">
+                {{ strtoupper(substr($company->name, 0, 1)) }}
             </div>
-            <div class="hero__actions">
-                @if ($company->audits->isNotEmpty())
-                    <a class="btn btn--light" href="{{ route('audits.show', $company->audits->sortByDesc('created_at')->first()) }}">Buka audit terbaru</a>
+            <div class="company-hero-title-wrap">
+                <h1 class="company-hero-title">{{ $company->name }}</h1>
+                @if ($company->industry)
+                    <span class="company-badge-industry">{{ $company->industry }}</span>
+                @else
+                    <span class="text-muted">Bidang usaha belum diisi</span>
                 @endif
             </div>
         </div>
-        <div class="hero__body">
-            <div class="meta-row"><span>Alamat</span><b>{{ $company->address ?: 'Belum diisi' }}</b></div>
-            <div class="meta-row"><span>Bidang usaha</span><b>{{ $company->industry ?: 'Belum diisi' }}</b></div>
-            <div class="meta-row"><span>Nama PIC</span><b>{{ $company->contact_name ?: 'Belum diisi' }}</b></div>
-            <div class="meta-row"><span>Email PIC</span><b>{{ $company->contact_email ?: 'Belum diisi' }}</b></div>
+
+        <div class="meta-grid">
+            <div class="meta-item">
+                <span class="meta-label">Alamat Perusahaan</span>
+                <span class="meta-value">
+                    {{ $company->address ?: 'Belum diisi' }}
+                </span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Bidang Usaha</span>
+                <span class="meta-value">
+                    {{ $company->industry ?: 'Belum diisi' }}
+                </span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Nama PIC</span>
+                <span class="meta-value">
+                    {{ $company->contact_name ?: 'Belum diisi' }}
+                </span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Email PIC</span>
+                <span class="meta-value">
+                    @if ($company->contact_email)
+                        <a href="mailto:{{ $company->contact_email }}" style="color: inherit; text-decoration: none;">{{ $company->contact_email }}</a>
+                    @else
+                        <span class="text-muted">Belum diisi</span>
+                    @endif
+                </span>
+            </div>
         </div>
     </section>
 
-    <section class="panel panel--pad">
-        <div class="panel__head">
-            <div>
-                <h2>Audit perusahaan</h2>
-                <p>Seluruh kegiatan verifikasi untuk perusahaan ini</p>
-            </div>
+    <!-- Panel Project Audit Terkait -->
+    <section class="data-card-panel">
+        <div class="panel-header">
+            <h2 class="panel-title">Project Audit Terkait</h2>
+            <p class="panel-desc">Daftar referensi project audit yang terhubung dengan perusahaan ini sebagai auditee.</p>
         </div>
 
         <div class="table-wrap">
-            <table class="table">
+            <table class="custom-table">
                 <thead>
                     <tr>
-                        <th>Judul audit</th>
-                        <th>Status</th>
-                        <th>Tanggal</th>
-                        <th>Indikator</th>
-                        <th>Progres</th>
-                        <th></th>
+                        <th scope="col">Nama Project</th>
+                        <th scope="col">Jenis Audit</th>
+                        <th scope="col">Periode Audit</th>
+                        <th scope="col" style="text-align: right;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
-                @forelse ($company->audits->sortByDesc('created_at') as $audit)
-                    @php
-                        $totalItems = $audit->items->count();
-                        $verifiedItems = $audit->items->whereIn('status', ['compliant', 'non_compliant', 'not_applicable'])->count();
-                        $progress = $totalItems ? round($verifiedItems / $totalItems * 100) : 0;
-                        $statusClass = $audit->status === 'completed' ? 'chip--done' : ($audit->status === 'in_progress' ? 'chip--wip' : 'chip--todo');
-                        $statusLabel = $audit->status === 'completed' ? 'Selesai' : ($audit->status === 'in_progress' ? 'Proses verifikasi' : 'Belum mulai');
-                    @endphp
+                @forelse ($company->auditProjects as $project)
                     <tr>
-                        <td>
-                            <div class="cell-company">
-                                <div class="avatar {{ $avatarColors[$loop->index % 5] }}">{{ $initials($audit->title ?: $company->name) }}</div>
-                                <div>
-                                    <strong>{{ $audit->title ?: 'Audit verifikasi' }}</strong>
-                                    <span>{{ $audit->auditor_name ?: 'Auditor belum ditentukan' }}</span>
-                                </div>
-                            </div>
+                        <td data-label="Nama Project">
+                            <strong>{{ $project->name }}</strong>
                         </td>
-                        <td><span class="chip {{ $statusClass }}">{{ $statusLabel }}</span></td>
-                        <td>{{ $audit->due_date?->format('d M Y') ?: 'Tanpa deadline' }}</td>
-                        <td><div class="cell-meta"><strong>{{ $verifiedItems }}</strong> / {{ $totalItems }} dinilai</div></td>
-                        <td>
-                            <div class="progress">
-                                <div class="progress__track">
-                                    <div class="progress__bar" style="width:{{ $progress }}%"></div>
-                                </div>
-                                <span class="progress__pct">{{ $progress }}%</span>
-                            </div>
+                        <td data-label="Jenis Audit">
+                            @if ($project->audit_type)
+                                {{ $project->audit_type }}
+                            @else
+                                <span class="text-muted">Belum diisi</span>
+                            @endif
                         </td>
-                        <td><a class="link" href="{{ route('audits.show', $audit) }}">Buka audit →</a></td>
+                        <td data-label="Periode">
+                            {{ $project->audit_start_date->format('d M Y') }} – {{ $project->audit_end_date->format('d M Y') }}
+                        </td>
+                        <td data-label="Aksi" style="text-align: right;">
+                            <a class="link-action" href="{{ route('audit-projects.show', $project) }}">
+                                <span>Buka Project</span>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    <polyline points="12 5 19 12 12 19"></polyline>
+                                </svg>
+                            </a>
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6">
-                            <div class="empty">
-                                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M9 11l3 3L22 4"/>
-                                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                                </svg>
-                                <strong>Belum ada audit</strong>
-                                <span>Audit baru dibuat otomatis saat perusahaan pertama kali ditambahkan.</span>
+                        <td colspan="4">
+                            <div class="empty-container">
+                                <div class="empty-icon-wrap" aria-hidden="true">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                </div>
+                                <h3 class="empty-title">Belum Ada Project Audit</h3>
+                                <p class="empty-desc">Project audit yang menggunakan perusahaan ini akan otomatis tampil sebagai referensi di sini.</p>
                             </div>
                         </td>
                     </tr>

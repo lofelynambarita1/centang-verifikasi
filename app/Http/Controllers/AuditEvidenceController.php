@@ -5,13 +5,16 @@ namespace App\Http\Controllers;
 use App\Http\Requests\RemoveAuditEvidenceRequest;
 use App\Http\Requests\ReorderAuditEvidenceRequest;
 use App\Http\Requests\ReplaceAuditEvidenceRequest;
+use App\Http\Requests\StoreAuditEditorImageRequest;
 use App\Http\Requests\StoreAuditEvidenceRequest;
 use App\Http\Requests\UpdateAuditEvidenceMetadataRequest;
 use App\Models\AuditIndicatorEvidence;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
 use App\Services\AuditEvidenceService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -29,6 +32,32 @@ class AuditEvidenceController extends Controller
         $this->evidences->store($auditProject, $indicator, $request->user(), $request->file('evidence'));
 
         return back()->with('success', 'Evidence berhasil diunggah.');
+    }
+
+    public function storeEditorImage(
+        StoreAuditEditorImageRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+    ): JsonResponse {
+        abort_if($indicator->audit_project_id !== $auditProject->id, 404);
+
+        $evidence = $this->evidences->store($auditProject, $indicator, $request->user(), $request->file('evidence'));
+        $caption = $request->validated('caption');
+
+        if ($caption !== null && trim((string) $caption) !== '') {
+            $evidence = $this->evidences->updateMetadata(
+                $auditProject,
+                $indicator,
+                $evidence,
+                $request->user(),
+                trim((string) $caption),
+                (bool) $evidence->is_report_included,
+            );
+        }
+
+        return response()->json([
+            'evidence' => $this->editorEvidencePayload($auditProject, $indicator, $evidence),
+        ], 201);
     }
 
     public function update(
@@ -49,7 +78,7 @@ class AuditEvidenceController extends Controller
             (bool) $request->boolean('is_report_included'),
         );
 
-        return back()->with('success', 'Metadata evidence disimpan.');
+        return back()->with('success', 'Perubahan evidence disimpan.');
     }
 
     public function reorder(
@@ -101,6 +130,7 @@ class AuditEvidenceController extends Controller
     }
 
     public function download(
+        Request $request,
         AuditProject $auditProject,
         AuditProjectIndicator $indicator,
         AuditIndicatorEvidence $evidence,
@@ -115,6 +145,12 @@ class AuditEvidenceController extends Controller
         $downloadName = str_replace(["\r", "\n", '"'], '', basename($evidence->original_name));
 
         if (config('filesystems.disks.'.$evidence->storage_disk.'.driver') === 'local') {
+            if ($request->boolean('preview') && in_array($evidence->mime_type, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], true)) {
+                return response()->file($disk->path($evidence->storage_path), [
+                    'Content-Type' => $evidence->mime_type,
+                ]);
+            }
+
             return response()->download($disk->path($evidence->storage_path), $downloadName, [
                 'Content-Type' => $evidence->mime_type,
             ]);
@@ -131,7 +167,10 @@ class AuditEvidenceController extends Controller
             fclose($stream);
         }, 200, [
             'Content-Type' => $evidence->mime_type,
-            'Content-Disposition' => "attachment; filename*=UTF-8''".rawurlencode($downloadName),
+            'Content-Disposition' => $request->boolean('preview')
+                && in_array($evidence->mime_type, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], true)
+                ? "inline; filename*=UTF-8''".rawurlencode($downloadName)
+                : "attachment; filename*=UTF-8''".rawurlencode($downloadName),
         ]);
     }
 
@@ -146,5 +185,22 @@ class AuditEvidenceController extends Controller
                 || $evidence->audit_project_indicator_id !== $indicator->id,
             404,
         );
+    }
+
+    /**
+     * @return array{id: int, name: string, caption: ?string, preview_url: string, view_url: string}
+     */
+    private function editorEvidencePayload(
+        AuditProject $project,
+        AuditProjectIndicator $indicator,
+        AuditIndicatorEvidence $evidence,
+    ): array {
+        return [
+            'id' => $evidence->id,
+            'name' => $evidence->original_name,
+            'caption' => $evidence->caption,
+            'preview_url' => route('audit-projects.evidences.download', [$project, $indicator, $evidence, 'preview' => 1]),
+            'view_url' => route('audit-projects.evidences.download', [$project, $indicator, $evidence, 'preview' => 1]),
+        ];
     }
 }

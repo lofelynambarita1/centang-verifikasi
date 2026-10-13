@@ -53,10 +53,11 @@ class AuditProjectService
     {
         return DB::transaction(function () use ($project, $data, $actor): AuditProject {
             $templateChanged = (int) $data['template_id'] !== (int) $project->template_id;
+            $status = $data['status'] ?? $project->status->value;
 
-            $this->assertValidStatusTransition($project, $data['status']);
+            $this->assertValidStatusTransition($project, $status);
 
-            $nextStatus = AuditProjectStatus::from($data['status']);
+            $nextStatus = AuditProjectStatus::from($status);
 
             if ($templateChanged
                 && ! in_array($project->status, [AuditProjectStatus::Draft, AuditProjectStatus::TeamSetup], true)) {
@@ -83,7 +84,7 @@ class AuditProjectService
                 'audit_start_date' => $data['audit_start_date'],
                 'audit_end_date' => $data['audit_end_date'],
                 'land_area' => $data['land_area'] ?? null,
-                'status' => $data['status'],
+                'status' => $status,
             ]);
 
             if ($templateChanged) {
@@ -93,6 +94,34 @@ class AuditProjectService
             $this->log($project, $actor, 'project.updated', 'Data project "'.$project->name.'" diperbarui.');
 
             return $project;
+        });
+    }
+
+    /**
+     * Start the audit in one safe action after every indicator has a PIC.
+     */
+    public function startAudit(AuditProject $project, User $actor): AuditProject
+    {
+        return DB::transaction(function () use ($project, $actor): AuditProject {
+            $lockedProject = AuditProject::query()
+                ->whereKey($project->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedProject->status === AuditProjectStatus::InProgress) {
+                return $lockedProject;
+            }
+
+            if ($lockedProject->unassignedIndicatorCount() > 0) {
+                throw ValidationException::withMessages([
+                    'start_audit' => 'Semua indikator harus memiliki auditor/PIC sebelum audit dimulai.',
+                ]);
+            }
+
+            $lockedProject->update(['status' => AuditProjectStatus::InProgress->value]);
+            $this->log($lockedProject, $actor, 'project.started', 'Audit berhasil dimulai. Auditor sudah dapat mengisi Hasil Audit.');
+
+            return $lockedProject;
         });
     }
 
@@ -138,7 +167,12 @@ class AuditProjectService
 
     public function addAuditor(AuditProject $project, User $member, User $actor): AuditProjectMember
     {
-        return $this->addMember($project, $member, ProjectRole::Auditor, $actor);
+        return DB::transaction(function () use ($project, $member, $actor): AuditProjectMember {
+            $memberModel = $this->addMember($project, $member, ProjectRole::Auditor, $actor);
+            $this->promoteToAssignmentIfReady($project, $actor);
+
+            return $memberModel;
+        });
     }
 
     public function removeMember(AuditProject $project, AuditProjectMember $member, User $actor): void
@@ -225,7 +259,31 @@ class AuditProjectService
                 'new_user_id' => $newLead->id,
             ]);
 
+            $this->promoteToAssignmentIfReady($lockedProject, $actor);
+
             return $newLeadMember;
+        });
+    }
+
+    /**
+     * Complete team setup explicitly for an existing project after the
+     * administrator has confirmed that its valid team is complete.
+     */
+    public function completeTeamSetup(AuditProject $project, User $actor): bool
+    {
+        return DB::transaction(function () use ($project, $actor): bool {
+            $lockedProject = AuditProject::query()
+                ->whereKey($project->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $this->promoteToAssignmentIfReady($lockedProject, $actor)) {
+                throw ValidationException::withMessages([
+                    'team' => 'Tim auditor belum lengkap. Pastikan project memiliki satu Lead Auditor dan minimal satu anggota auditor.',
+                ]);
+            }
+
+            return true;
         });
     }
 
@@ -337,6 +395,32 @@ class AuditProjectService
         $this->log($project, $actor, 'member.added', 'Anggota "'.$member->name.'" ditambahkan sebagai '.$role->label().'.');
 
         return $memberModel;
+    }
+
+    private function promoteToAssignmentIfReady(AuditProject $project, User $actor): bool
+    {
+        if (! in_array($project->status, [AuditProjectStatus::Draft, AuditProjectStatus::TeamSetup], true)) {
+            return $project->status === AuditProjectStatus::Assignment;
+        }
+
+        $leadCount = $project->members()
+            ->where('project_role', ProjectRole::LeadAuditor->value)
+            ->count();
+
+        if ($leadCount !== 1
+            || $project->members()->count() < 2
+            || ! $project->snapshotPrinciples()->exists()) {
+            return false;
+        }
+
+        if ($project->status === AuditProjectStatus::Draft) {
+            $project->update(['status' => AuditProjectStatus::TeamSetup->value]);
+        }
+
+        $project->update(['status' => AuditProjectStatus::Assignment->value]);
+        $this->log($project, $actor, 'team.setup_completed', 'Tim auditor berhasil disimpan. Project siap untuk pembagian auditor.');
+
+        return true;
     }
 
     private function log(AuditProject $project, User $actor, string $activity, string $description, ?array $meta = null): void

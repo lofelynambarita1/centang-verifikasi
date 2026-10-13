@@ -12,6 +12,79 @@ use RuntimeException;
 class TemplateJsonImporter
 {
     /**
+     * Import the canonical ISPO structure from the application configuration.
+     */
+    public function importFromConfig(?User $actor = null): AuditTemplate
+    {
+        $config = config('ispo');
+        $principles = [];
+
+        foreach ($config['principles'] as $principleCode => $principleTitle) {
+            $sections = [];
+
+            foreach ($config['criteria'] as $criteriaCode => $criteria) {
+                if (! str_starts_with($criteriaCode, "{$principleCode}.") || substr_count($criteriaCode, '.') !== 1) {
+                    continue;
+                }
+
+                $indicators = [];
+
+                foreach ($config['indicators'] as $indicator) {
+                    if ($indicator['criteria'] !== $criteriaCode) {
+                        continue;
+                    }
+
+                    $parameters = [];
+                    foreach (array_values($indicator['parameters']) as $sortOrder => $content) {
+                        $parameters[] = [
+                            'parameter_type' => 'parameter',
+                            'number' => null,
+                            'content' => $content,
+                            'sort_order' => $sortOrder,
+                        ];
+                    }
+
+                    $indicators[] = [
+                        'code' => $indicator['code'],
+                        'title' => $indicator['title'],
+                        'description' => null,
+                        'indicator_type' => null,
+                        'sort_order' => count($indicators),
+                        'parameters' => $parameters,
+                    ];
+                }
+
+                $sections[] = [
+                    'code' => $criteriaCode,
+                    'title' => $criteria['title'],
+                    'description' => $criteria['description'] ?: null,
+                    'sort_order' => count($sections),
+                    'sections' => [],
+                    'indicators' => $indicators,
+                ];
+            }
+
+            $principles[] = [
+                'code' => (string) $principleCode,
+                'title' => $principleTitle,
+                'description' => null,
+                'sort_order' => count($principles),
+                'sections' => $sections,
+            ];
+        }
+
+        return $this->importFromArray([
+            '_meta' => [
+                'template_code' => 'FrO.8603/GIS-1.1',
+                'template_scheme' => 'ISPO',
+                'template_name' => 'Laporan Verifikasi Hasil ISPO',
+                'template_version' => '1.1',
+            ],
+            'principles' => $principles,
+        ], $actor);
+    }
+
+    /**
      * Import a template structure from a JSON file into the master tables.
      * The import is idempotent: running it again replaces the structure of the
      * same template with the exact content of the file.
@@ -49,6 +122,7 @@ class TemplateJsonImporter
         );
 
         DB::transaction(function () use ($template, $data): void {
+            $template->principles()->delete();
             $this->replaceStructure($template, $data['principles'] ?? []);
         });
 

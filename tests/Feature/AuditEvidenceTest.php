@@ -63,6 +63,11 @@ class AuditEvidenceTest extends TestCase
         $this->actingAs($pic)
             ->get(route('audit-projects.evidences.download', [$project, $indicator, $evidence]))
             ->assertDownload('photo.png');
+
+        $this->actingAs($pic)
+            ->get(route('audit-projects.evidences.download', [$project, $indicator, $evidence, 'preview' => 1]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png');
     }
 
     public function test_new_evidence_uses_incrementing_sort_order_and_false_report_flag(): void
@@ -199,8 +204,9 @@ class AuditEvidenceTest extends TestCase
 
         $this->actingAs($lead)->get(route('audit-projects.work.show', [$project, $indicator]))
             ->assertOk()
-            ->assertSee('Tampilkan di Laporan: Tidak')
-            ->assertDontSee('Simpan Metadata');
+            ->assertSee('Sertakan evidence ini dalam laporan: Tidak')
+            ->assertDontSee('Simpan Metadata')
+            ->assertDontSee('Keterangan Evidence');
     }
 
     public function test_metadata_mutation_is_forbidden_when_project_is_not_in_progress(): void
@@ -365,16 +371,21 @@ class AuditEvidenceTest extends TestCase
         ])->assertRedirect();
 
         $this->actingAs($pic)->get(route('audit-projects.work.show', [$project, $indicator]))
-            ->assertSee('Upload Evidence')
+            ->assertSee('Tambah Evidence')
             ->assertSee('Ganti File')
             ->assertSee('Hapus Evidence')
-            ->assertSee('file fisik tidak langsung dimusnahkan')
-            ->assertSee('report.pdf');
+            ->assertSee('Hapus evidence ini?')
+            ->assertSee('Evidence akan dihapus dari indikator ini. Tindakan tetap tercatat pada audit trail.')
+            ->assertDontSee('Alasan penghapusan')
+            ->assertSee('report.pdf')
+            ->assertSee('Keterangan Evidence')
+            ->assertSee('Sertakan evidence ini dalam laporan')
+            ->assertSee('Simpan Perubahan');
         $this->actingAs($lead)->get(route('audit-projects.work.show', [$project, $indicator]))
-            ->assertDontSee('Upload Evidence')
+            ->assertDontSee('Tambah Evidence')
             ->assertSee('report.pdf');
         $this->actingAs($admin)->get(route('audit-projects.work.show', [$project, $indicator]))
-            ->assertDontSee('Upload Evidence')
+            ->assertDontSee('Tambah Evidence')
             ->assertSee('report.pdf');
     }
 
@@ -424,7 +435,7 @@ class AuditEvidenceTest extends TestCase
         ])->assertForbidden();
     }
 
-    public function test_removal_requires_reason_and_is_restricted_to_active_pic_in_progress(): void
+    public function test_removal_reason_is_optional_and_removal_is_restricted_to_active_pic_in_progress(): void
     {
         [$project, $indicator, $pic, $admin, $lead, $auditor] = $this->context(true);
         Storage::fake('audit_evidence');
@@ -434,7 +445,13 @@ class AuditEvidenceTest extends TestCase
         $evidence = AuditIndicatorEvidence::firstOrFail();
 
         $this->actingAs($pic)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [])
-            ->assertSessionHasErrors('removal_reason');
+            ->assertRedirect();
+        $evidence->refresh();
+        $this->assertNull($evidence->removal_reason);
+        $this->assertSame(
+            'Evidence "reason.pdf" dihapus oleh '.$pic->name.'.',
+            ActivityLog::where('activity', 'audit_evidence.removed')->latest('id')->value('description'),
+        );
         foreach ([$lead, $admin, $auditor] as $user) {
             $this->actingAs($user)->delete(route('audit-projects.evidences.remove', [$project, $indicator, $evidence]), [
                 'removal_reason' => 'Tidak digunakan',

@@ -62,6 +62,29 @@ class AuditAssignmentTest extends TestCase
         return $project;
     }
 
+    public function test_completed_team_setup_promotes_project_before_principle_assignment(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $auditor = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead, [$auditor]);
+        $project->update(['status' => AuditProjectStatus::Draft->value]);
+
+        $this->actingAs($admin)
+            ->post(route('audit-projects.team.complete', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Tim auditor berhasil disimpan. Project siap untuk pembagian auditor.');
+
+        $this->assertSame(AuditProjectStatus::Assignment, $project->refresh()->status);
+
+        $this->actingAs($lead)
+            ->post(route('audit-projects.assignments.auto', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success', '2 Prinsip berhasil dibagi ke 2 auditor. 5 indikator telah memiliki PIC.');
+
+        $this->assertSame(5, $project->assignments()->count());
+    }
+
     public function test_single_indicator_assignment_creates_assignment_history_and_log(): void
     {
         $admin = User::factory()->admin()->create();
@@ -167,7 +190,7 @@ class AuditAssignmentTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_assignment_page_is_read_only_for_regular_auditors(): void
+    public function test_regular_auditors_cannot_open_assignment_page(): void
     {
         $admin = User::factory()->admin()->create();
         $lead = User::factory()->auditor()->create();
@@ -176,9 +199,66 @@ class AuditAssignmentTest extends TestCase
 
         $this->actingAs($auditor)
             ->get(route('audit-projects.assignments', $project))
+            ->assertForbidden();
+    }
+
+    public function test_edit_project_does_not_show_the_status_dropdown(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead);
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.edit', $project))
             ->assertOk()
-            ->assertDontSee('Tetapkan semua ke PIC')
-            ->assertDontSee('Bagi Otomatis');
+            ->assertDontSee('name="status"', false)
+            ->assertDontSee('>Status</label>', false);
+    }
+
+    public function test_admin_can_start_audit_after_all_indicators_are_assigned(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead);
+
+        $this->actingAs($admin)
+            ->post(route('audit-projects.assignments.auto', $project))
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->post(route('audit-projects.start', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Audit berhasil dimulai. Auditor sudah dapat mengisi Hasil Audit.');
+
+        $this->assertSame(AuditProjectStatus::InProgress, $project->refresh()->status);
+
+        $indicator = $project->snapshotIndicators()->firstOrFail();
+        $this->actingAs($lead)
+            ->get(route('audit-projects.work.show', [$project, $indicator]))
+            ->assertOk()
+            ->assertSee('Simpan Draft');
+    }
+
+    public function test_admin_cannot_start_audit_with_unassigned_indicators(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead);
+
+        $this->actingAs($admin)
+            ->post(route('audit-projects.assignments.store', [$project, $project->snapshotIndicators()->firstOrFail()]), [
+                'pic_user_id' => $lead->id,
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->post(route('audit-projects.start', $project))
+            ->assertSessionHasErrors('start_audit')
+            ->assertSessionHasErrors([
+                'start_audit' => 'Semua indikator harus memiliki auditor/PIC sebelum audit dimulai.',
+            ]);
+
+        $this->assertSame(AuditProjectStatus::Assignment, $project->refresh()->status);
     }
 
     public function test_lead_auditor_can_manage_assignments(): void
@@ -198,6 +278,59 @@ class AuditAssignmentTest extends TestCase
             'audit_project_indicator_id' => $indicator->id,
             'pic_user_id' => $auditor->id,
         ]);
+    }
+
+    public function test_lead_auditor_can_open_assignment_page_and_start_complete_audit(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead);
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.assignments', $project))
+            ->assertOk()
+            ->assertSee('Pembagian Auditor')
+            ->assertSee('Bagi Prinsip Otomatis')
+            ->assertSee('Lihat / Atur Detail')
+            ->assertDontSee('name="pic_user_ids[]"', false)
+            ->assertSee('data-assignment-drawer', false)
+            ->assertSee('data-drawer-content', false)
+            ->assertSee('data-drawer-content="', false)
+            ->assertSee('data-detail-indicator', false);
+
+        $this->actingAs($lead)
+            ->post(route('audit-projects.assignments.auto', $project))
+            ->assertRedirect();
+
+        $this->actingAs($lead)
+            ->post(route('audit-projects.start', $project))
+            ->assertRedirectToRoute('audit-projects.my-work', $project)
+            ->assertSessionHas('success', 'Audit berhasil dimulai. Auditor sudah dapat mengisi Hasil Audit.');
+
+        $this->assertSame(AuditProjectStatus::InProgress, $project->refresh()->status);
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.assignments', $project))
+            ->assertOk()
+            ->assertSee('Lihat Detail')
+            ->assertDontSee('Bagi Prinsip Otomatis')
+            ->assertDontSee('Mulai Audit')
+            ->assertDontSee('name="pic_user_id"', false);
+    }
+
+    public function test_assignment_page_explains_unassigned_indicators_before_starting(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead);
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.assignments', $project))
+            ->assertOk()
+            ->assertSee('Audit belum dapat dimulai.')
+            ->assertSee($project->snapshotPrinciples()->count().' Prinsip belum memiliki PIC')
+            ->assertSee($project->snapshotIndicators()->count().' indikator belum memiliki auditor/PIC')
+            ->assertDontSee('>Mulai Audit</button>', false);
     }
 
     public function test_lead_auditor_can_be_assigned_as_pic(): void
@@ -260,7 +393,7 @@ class AuditAssignmentTest extends TestCase
         ]);
     }
 
-    public function test_auto_assign_only_fills_unassigned_indicators(): void
+    public function test_auto_assign_only_fills_wholly_unassigned_principles(): void
     {
         $admin = User::factory()->admin()->create();
         $lead = User::factory()->auditor()->create();
@@ -272,18 +405,18 @@ class AuditAssignmentTest extends TestCase
         app(AssignmentService::class)->assign($project, $manual, $auditorA, $admin);
 
         $this->actingAs($admin)
-            ->post(route('audit-projects.assignments.auto', $project), ['pic_user_ids' => [$auditorA->id, $auditorB->id]])
+            ->post(route('audit-projects.assignments.auto', $project))
             ->assertRedirect();
 
         $this->assertSame($auditorA->id, $manual->assignment->pic_user_id, 'manual assignment stays untouched');
-        $this->assertSame(5, $project->assignments()->count(), 'only the 4 unassigned indicators get filled');
+        $this->assertSame(3, $project->assignments()->count(), 'the assigned principle is skipped and the other principle is filled');
         $this->assertDatabaseHas('activity_logs', [
             'audit_project_id' => $project->id,
             'activity' => 'assignment.auto_assigned',
         ]);
     }
 
-    public function test_auto_assign_balances_workload_as_evenly_as_possible(): void
+    public function test_auto_assign_distributes_principles_in_round_robin_order(): void
     {
         $admin = User::factory()->admin()->create();
         $lead = User::factory()->auditor()->create();
@@ -295,26 +428,93 @@ class AuditAssignmentTest extends TestCase
         app(AssignmentService::class)->assign($project, $alreadyOwned, $auditorA, $admin);
 
         $this->actingAs($admin)
-            ->post(route('audit-projects.assignments.auto', $project), ['pic_user_ids' => [$auditorA->id, $auditorB->id]])
+            ->post(route('audit-projects.assignments.auto', $project))
             ->assertRedirect();
 
-        $loadA = $project->assignments()->where('pic_user_id', $auditorA->id)->count();
-        $loadB = $project->assignments()->where('pic_user_id', $auditorB->id)->count();
+        $principleOneIndicatorIds = $project->snapshotIndicators()
+            ->whereIn('audit_project_section_id', $project->snapshotSections()->where('audit_project_principle_id', $project->snapshotPrinciples()->where('code', '1')->value('id'))->pluck('id'))
+            ->pluck('id');
 
-        $this->assertSame(5, $loadA + $loadB, 'every indicator ends up assigned');
-        $this->assertLessThanOrEqual(1, abs($loadA - $loadB), 'workloads must be as even as possible');
+        $this->assertSame(4, $project->assignments()->count(), 'only the unassigned principle is filled');
+        $this->assertSame(
+            count($principleOneIndicatorIds),
+            $project->assignments()->whereIn('audit_project_indicator_id', $principleOneIndicatorIds)
+                ->where('pic_user_id', $lead->id)->count(),
+        );
+        $this->assertSame(
+            0,
+            $project->assignments()->whereIn('audit_project_indicator_id', $principleOneIndicatorIds)
+                ->where('pic_user_id', $auditorB->id)->count(),
+        );
         $this->assertSame($auditorA->id, $alreadyOwned->assignment->pic_user_id, 'existing assignment is preserved');
     }
 
-    public function test_auto_assign_requires_at_least_one_auditor(): void
+    public function test_auto_assign_uses_all_project_members_without_auditor_input(): void
     {
         $admin = User::factory()->admin()->create();
         $lead = User::factory()->auditor()->create();
         $project = $this->createProject($admin, $lead);
 
         $this->actingAs($admin)
-            ->post(route('audit-projects.assignments.auto', $project), ['pic_user_ids' => []])
-            ->assertSessionHasErrors('pic_user_ids');
+            ->post(route('audit-projects.assignments.auto', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success', '2 Prinsip berhasil dibagi ke 1 auditor. 5 indikator telah memiliki PIC.');
+
+        $this->assertSame(5, $project->assignments()->count());
+    }
+
+    public function test_auto_assign_uses_round_robin_for_one_selected_auditor(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead);
+
+        $this->actingAs($lead)
+            ->post(route('audit-projects.assignments.auto', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success', '2 Prinsip berhasil dibagi ke 1 auditor. 5 indikator telah memiliki PIC.');
+
+        $this->assertSame(5, $project->assignments()->where('pic_user_id', $lead->id)->count());
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.assignments', $project))
+            ->assertSee('2 / 2')
+            ->assertSee('5 / 5 indikator memiliki PIC');
+    }
+
+    public function test_auto_assign_never_includes_a_user_who_is_not_a_project_member(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $outsider = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead);
+
+        $this->actingAs($admin)
+            ->post(route('audit-projects.assignments.auto', $project))
+            ->assertRedirect();
+
+        $this->assertSame(5, $project->assignments()->count());
+        $this->assertDatabaseMissing('audit_indicator_assignments', ['pic_user_id' => $outsider->id]);
+    }
+
+    public function test_auto_assign_reports_when_every_indicator_already_has_a_pic(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $project = $this->createProject($admin, $lead);
+
+        foreach ($project->snapshotIndicators()->get() as $indicator) {
+            app(AssignmentService::class)->assign($project, $indicator, $lead, $admin);
+        }
+
+        $assignmentCount = $project->assignments()->count();
+
+        $this->actingAs($admin)
+            ->post(route('audit-projects.assignments.auto', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Semua prinsip sudah memiliki pembagian atau pengecualian.');
+
+        $this->assertSame($assignmentCount, $project->assignments()->count());
     }
 
     public function test_member_still_having_assignments_cannot_be_removed(): void
@@ -572,7 +772,7 @@ class AuditAssignmentTest extends TestCase
         }
 
         try {
-            app(AssignmentService::class)->autoAssign($project, [$auditor->id], $admin);
+            app(AssignmentService::class)->autoAssign($project, $admin);
             $this->fail('Auto assignment must be rejected while the project is in progress.');
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('status', $e->errors());

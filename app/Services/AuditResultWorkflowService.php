@@ -99,6 +99,76 @@ class AuditResultWorkflowService
         return $this->review($project, $indicator, $actor, $expectedLockVersion, AuditResultWorkflowStatus::Approved, AuditResultReviewAction::Approved, $note);
     }
 
+    public function finalizeOwnIndicator(
+        AuditProject $project,
+        AuditProjectIndicator $indicator,
+        User $actor,
+        int $expectedLockVersion,
+        ?string $note,
+    ): AuditIndicatorResult {
+        if ($project->status !== AuditProjectStatus::InProgress) {
+            throw ValidationException::withMessages(['status' => 'Finalisasi hanya dapat dilakukan ketika project berstatus "Berjalan" (in_progress).']);
+        }
+
+        if (! $project->userIsLead($actor)) {
+            throw ValidationException::withMessages(['actor' => 'Hanya Lead Auditor project yang dapat finalisasi indikator miliknya.']);
+        }
+
+        if ($indicator->assignment?->pic_user_id !== $actor->id) {
+            throw ValidationException::withMessages(['actor' => 'Finalisasi hanya dapat dilakukan untuk indikator yang Anda PIC-kan.']);
+        }
+
+        return DB::transaction(function () use ($project, $indicator, $actor, $expectedLockVersion, $note): AuditIndicatorResult {
+            $result = AuditIndicatorResult::query()
+                ->where('audit_project_id', $project->id)
+                ->where('audit_project_indicator_id', $indicator->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($result === null) {
+                throw ValidationException::withMessages(['result' => 'Hasil Audit belum tersedia.']);
+            }
+
+            if (! in_array($result->workflow_status, [
+                AuditResultWorkflowStatus::Draft,
+                AuditResultWorkflowStatus::RevisionRequested,
+            ], true)) {
+                throw ValidationException::withMessages(['workflow_status' => 'Indikator milik Lead Auditor hanya dapat diselesaikan dari draft atau revisi.']);
+            }
+
+            if ($expectedLockVersion !== $result->lock_version) {
+                throw ValidationException::withMessages([
+                    'lock_version' => 'Hasil Audit berubah sejak halaman ini dibuka. Muat ulang sebelum finalisasi.',
+                ]);
+            }
+
+            if (trim((string) $result->result_text) === '') {
+                throw ValidationException::withMessages(['result_text' => 'Hasil Audit tidak boleh kosong.']);
+            }
+
+            if ($result->assessment_status === null) {
+                throw ValidationException::withMessages(['assessment_status' => 'Pilih status penilaian sebelum finalisasi.']);
+            }
+
+            $attributes = [
+                'workflow_status' => AuditResultWorkflowStatus::Approved,
+                'approved_at' => now(),
+                'approved_by' => $actor->id,
+            ];
+            $result->update($attributes);
+
+            $this->recordReviewEvent($project, $indicator, $result, AuditResultReviewAction::Approved, $note, $actor);
+            $project->activityLogs()->create([
+                'user_id' => $actor->id,
+                'activity' => 'audit_result.approved',
+                'description' => 'Lead Auditor menyelesaikan audit indikator "'.$indicator->code.'" secara langsung.',
+                'meta' => ['indicator_id' => $indicator->id, 'result_id' => $result->id],
+            ]);
+
+            return $result->refresh();
+        });
+    }
+
     private function review(
         AuditProject $project,
         AuditProjectIndicator $indicator,
@@ -114,6 +184,10 @@ class AuditResultWorkflowService
 
         if (! $project->userIsLead($actor)) {
             throw ValidationException::withMessages(['actor' => 'Hanya Lead Auditor project yang dapat memberikan keputusan review.']);
+        }
+
+        if ($indicator->assignment?->pic_user_id === $actor->id) {
+            throw ValidationException::withMessages(['actor' => 'Lead Auditor tidak dapat mereview indikator yang dikerjakannya sendiri.']);
         }
 
         return DB::transaction(function () use ($project, $indicator, $actor, $expectedLockVersion, $status, $action, $note): AuditIndicatorResult {

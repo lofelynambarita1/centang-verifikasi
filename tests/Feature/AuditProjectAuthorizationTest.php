@@ -45,7 +45,85 @@ class AuditProjectAuthorizationTest extends TestCase
 
         $this->actingAs($auditor)
             ->get(route('audit-projects.team', $project))
+            ->assertForbidden();
+
+        $this->actingAs($auditor)
+            ->get(route('audit-projects.my-work', $project))
             ->assertOk();
+
+        $this->actingAs($auditor)
+            ->get(route('audit-projects.assignments', $project))
+            ->assertForbidden();
+
+        $this->actingAs($auditor)
+            ->post(route('audit-projects.start', $project))
+            ->assertForbidden();
+
+        $this->actingAs($auditor)
+            ->get(route('audit-projects.show', $project))
+            ->assertOk()
+            ->assertSee('Peran Anda')
+            ->assertSee('Auditor')
+            ->assertSee('Pekerjaan Saya')
+            ->assertDontSee('Pembagian Auditor')
+            ->assertDontSee('Kelola Tim')
+            ->assertDontSee('Edit Project');
+    }
+
+    public function test_lead_access_is_scoped_to_the_project_membership_role(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $regularAuditor = User::factory()->auditor()->create();
+
+        $projectA = $admin->createdAuditProjects()->create([
+            'template_id' => AuditTemplate::factory()->create()->id,
+            'company_id' => Company::factory()->create()->id,
+            'name' => 'Project lead saya',
+            'project_code' => 'PRJ-LEAD-A',
+            'audit_type' => 'Audit Lapangan',
+            'audit_start_date' => now()->addMonth()->toDateString(),
+            'audit_end_date' => now()->addMonth()->addDays(7)->toDateString(),
+        ]);
+        $projectA->members()->createMany([
+            ['user_id' => $lead->id, 'project_role' => 'lead_auditor', 'added_by' => $admin->id],
+            ['user_id' => $regularAuditor->id, 'project_role' => 'auditor', 'added_by' => $admin->id],
+        ]);
+
+        $projectB = $admin->createdAuditProjects()->create([
+            'template_id' => AuditTemplate::factory()->create()->id,
+            'company_id' => Company::factory()->create()->id,
+            'name' => 'Project lead lain',
+            'project_code' => 'PRJ-LEAD-B',
+            'audit_type' => 'Audit Dokumen',
+            'audit_start_date' => now()->addMonth()->toDateString(),
+            'audit_end_date' => now()->addMonth()->addDays(7)->toDateString(),
+        ]);
+        $projectB->members()->createMany([
+            ['user_id' => $lead->id, 'project_role' => 'auditor', 'added_by' => $admin->id],
+            ['user_id' => User::factory()->auditor()->create()->id, 'project_role' => 'lead_auditor', 'added_by' => $admin->id],
+        ]);
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.assignments', $projectA))
+            ->assertOk();
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.assignments', $projectB))
+            ->assertForbidden();
+
+        $this->actingAs($lead)
+            ->post(route('audit-projects.start', $projectB))
+            ->assertForbidden();
+
+        $this->actingAs($lead)
+            ->get(route('audit-projects.show', $projectA))
+            ->assertOk()
+            ->assertSee('Peran Anda')
+            ->assertSee('Lead Auditor')
+            ->assertSee('Pembagian Auditor')
+            ->assertDontSee('Kelola Tim')
+            ->assertDontSee('Edit Project');
     }
 
     public function test_auditor_cannot_open_a_project_where_they_are_not_registered(): void

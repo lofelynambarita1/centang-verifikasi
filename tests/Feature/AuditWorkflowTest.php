@@ -21,30 +21,32 @@ class AuditWorkflowTest extends TestCase
         $this->actingAs(User::factory()->admin()->create());
     }
 
-    public function test_a_company_creation_copies_the_iso_checklist_into_the_new_audit(): void
+    public function test_a_company_creation_only_stores_master_company_data(): void
     {
-        $canonical = IspoChecklist::items();
-
         $response = $this->post(route('companies.store'), [
             'name' => 'PT Test Verifikasi',
             'industry' => 'Manufaktur',
-            'due_date' => '2026-10-01',
+            'address' => 'Jl. Test No. 1',
+            'contact_name' => 'PIC Test',
+            'contact_email' => 'pic@example.com',
         ]);
 
         $company = Company::where('name', 'PT Test Verifikasi')->firstOrFail();
-        $audit = $company->audits()->firstOrFail();
 
-        $response->assertRedirect(route('audits.show', $audit));
-        $this->assertDatabaseHas('audits', ['company_id' => $company->id, 'status' => 'pending']);
-        $this->assertSame(count($canonical), $audit->items()->count());
-        $this->assertSame(
-            $canonical[0]['title'],
-            $audit->items()->orderBy('sort_order')->value('title'),
-        );
-        $this->get(route('audits.show', $audit))
+        $response->assertRedirect(route('companies.show', $company));
+        $this->assertDatabaseHas('companies', [
+            'id' => $company->id,
+            'industry' => 'Manufaktur',
+            'contact_name' => 'PIC Test',
+            'contact_email' => 'pic@example.com',
+        ]);
+        $this->assertDatabaseCount('audits', 0);
+        $this->get(route('companies.show', $company))
             ->assertOk()
-            ->assertSee('Prinsip verifikasi')
-            ->assertSee('Prinsip 2');
+            ->assertSee('Detail Perusahaan')
+            ->assertSee('Project Audit Terkait')
+            ->assertDontSee('Hasil Audit')
+            ->assertDontSee('Prinsip ISPO');
     }
 
     public function test_sync_command_unifies_legacy_audits_with_the_reference_checklist(): void

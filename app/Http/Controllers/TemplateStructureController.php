@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TemplateStructureController extends Controller
 {
@@ -38,11 +39,13 @@ class TemplateStructureController extends Controller
     {
         $this->authorize('update', $template);
         $this->ensureType($type);
+        $context = $this->structureContext($template, $type);
 
         return view('templates.structure.form', [
             'template' => $template,
             'type' => $type,
             'entity' => null,
+            ...$context,
             ...$this->formPayload($template, $type),
         ]);
     }
@@ -54,12 +57,66 @@ class TemplateStructureController extends Controller
 
         $data = $request->validated();
 
+        if ($type === 'principle') {
+            DB::transaction(function () use ($template, $data): void {
+                $data['sort_order'] = ((int) $template->principles()->max('sort_order')) + 1;
+                $template->principles()->create($data);
+            });
+
+            return redirect()->route('templates.structure.index', $template)
+                ->with('success', 'Prinsip berhasil ditambahkan.');
+        }
+
+        if ($type === 'section') {
+            $principle = AuditTemplatePrinciple::query()
+                ->where('audit_template_id', $template->id)
+                ->findOrFail($data['principle_id']);
+            $parentId = $data['parent_id'] ?? null;
+
+            DB::transaction(function () use ($principle, $parentId, $data): void {
+                $sectionData = $this->withoutKeys($data, ['principle_id']);
+                $sectionData['sort_order'] = ((int) $principle->sections()
+                    ->where('parent_id', $parentId)
+                    ->max('sort_order')) + 1;
+
+                if ($parentId === null) {
+                    $principle->sections()->create($sectionData);
+
+                    return;
+                }
+
+                AuditTemplateSection::query()
+                    ->where('principle_id', $principle->id)
+                    ->whereKey($parentId)
+                    ->firstOrFail()
+                    ->children()
+                    ->create([
+                        ...$this->withoutKeys($sectionData, ['parent_id']),
+                        'principle_id' => $principle->id,
+                    ]);
+            });
+
+            return redirect()->route('templates.structure.index', $template)
+                ->with('success', $parentId === null
+                    ? 'Kriteria berhasil ditambahkan.'
+                    : 'Sub-kriteria berhasil ditambahkan.');
+        }
+
+        if ($type === 'indicator') {
+            $section = AuditTemplateSection::query()
+                ->whereHas('principle', fn ($query) => $query->where('audit_template_id', $template->id))
+                ->findOrFail($data['section_id']);
+
+            $indicatorData = $this->withoutKeys($data, ['section_id', 'sort_order', 'indicator_type']);
+            $indicatorData['sort_order'] = ((int) $section->indicators()->max('sort_order')) + 1;
+
+            $section->indicators()->create($indicatorData);
+
+            return redirect()->route('templates.structure.index', $template)
+                ->with('success', 'Indikator berhasil ditambahkan.');
+        }
+
         match ($type) {
-            'principle' => $template->principles()->create($data),
-            'section' => AuditTemplatePrinciple::findOrFail($data['principle_id'])
-                ->sections()->create($this->withoutKeys($data, ['principle_id'])),
-            'indicator' => AuditTemplateSection::findOrFail($data['section_id'])
-                ->indicators()->create($this->withoutKeys($data, ['section_id'])),
             'parameter' => AuditTemplateIndicator::findOrFail($data['indicator_id'])
                 ->parameters()->create($this->withoutKeys($data, ['indicator_id'])),
         };
@@ -77,6 +134,8 @@ class TemplateStructureController extends Controller
             'template' => $template,
             'type' => $type,
             'entity' => $this->loadEntity($template, $type, $id),
+            'parentPrinciple' => null,
+            'parentSection' => null,
             ...$this->formPayload($template, $type),
         ]);
     }
@@ -90,7 +149,9 @@ class TemplateStructureController extends Controller
         $entity->update($this->withoutKeys($request->validated(), $this->immutableKeys($type)));
 
         return redirect()->route('templates.structure.index', $template)
-            ->with('success', 'Item struktur diperbarui.');
+            ->with('success', $type === 'indicator'
+                ? 'Indikator berhasil diperbarui.'
+                : 'Item struktur diperbarui.');
     }
 
     public function destroy(AuditTemplate $template, string $type, int $id): RedirectResponse
@@ -160,7 +221,7 @@ class TemplateStructureController extends Controller
     {
         return match ($type) {
             'section' => ['principle_id', 'parent_id'],
-            'indicator' => ['section_id'],
+            'indicator' => ['section_id', 'sort_order', 'indicator_type'],
             'parameter' => ['indicator_id'],
             default => [],
         };
@@ -199,6 +260,39 @@ class TemplateStructureController extends Controller
             ],
             default => [],
         };
+    }
+
+    /**
+     * @return array{parentPrinciple: ?AuditTemplatePrinciple, parentSection: ?AuditTemplateSection}
+     */
+    private function structureContext(AuditTemplate $template, string $type): array
+    {
+        if (! in_array($type, ['section', 'indicator'], true)) {
+            return ['parentPrinciple' => null, 'parentSection' => null];
+        }
+
+        if ($type === 'indicator') {
+            $parentSection = AuditTemplateSection::query()
+                ->whereHas('principle', fn ($query) => $query->where('audit_template_id', $template->id))
+                ->find(request()->integer('section_id'));
+
+            abort_if($parentSection === null, 404);
+
+            return [
+                'parentPrinciple' => $parentSection->principle,
+                'parentSection' => $parentSection,
+            ];
+        }
+
+        $parentPrinciple = AuditTemplatePrinciple::query()
+            ->where('audit_template_id', $template->id)
+            ->find(request()->integer('principle_id'));
+        $parentSection = $parentPrinciple?->sections()->whereKey(request()->integer('parent_id'))->first();
+
+        abort_if($parentPrinciple === null, 404);
+        abort_if(request()->filled('parent_id') && $parentSection === null, 404);
+
+        return compact('parentPrinciple', 'parentSection');
     }
 
     /**

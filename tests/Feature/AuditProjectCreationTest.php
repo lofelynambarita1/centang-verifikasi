@@ -100,6 +100,133 @@ class AuditProjectCreationTest extends TestCase
         });
     }
 
+    public function test_duplicate_project_identity_shows_warning_before_allowing_confirmation(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create();
+        $payload = $this->payload($lead, []);
+
+        $this->actingAs($admin)->post(route('audit-projects.store'), $payload)->assertRedirect();
+
+        $this->actingAs($admin)->get(route('audit-projects.create'))->assertOk();
+        $this->actingAs($admin)
+            ->post(route('audit-projects.store'), $payload)
+            ->assertRedirect(route('audit-projects.create'))
+            ->assertSessionHas('duplicate_warning');
+
+        $this->assertSame(1, AuditProject::count());
+
+        $this->actingAs($admin)
+            ->post(route('audit-projects.store'), [...$payload, 'confirm_duplicate' => 1])
+            ->assertRedirect();
+
+        $this->assertSame(2, AuditProject::count());
+    }
+
+    public function test_project_list_can_search_and_filter_using_query_parameters(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $lead = User::factory()->auditor()->create(['name' => 'Lead Arunika']);
+        $firstPayload = $this->payload($lead, [], Company::factory()->create(['name' => 'PT Arunika Logistik']));
+        $firstPayload['name'] = 'Audit Arunika 2026';
+        $this->actingAs($admin)->post(route('audit-projects.store'), $firstPayload)->assertRedirect();
+
+        $secondPayload = $this->payload($lead, [], Company::factory()->create(['name' => 'PT Sawit Makmur']));
+        $secondPayload['name'] = 'Audit Sawit 2026';
+        $secondPayload['audit_type'] = 'Audit Dokumen';
+        $this->actingAs($admin)->post(route('audit-projects.store'), $secondPayload)->assertRedirect();
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.index', [
+                'search' => 'arunika',
+                'status' => AuditProjectStatus::Draft->value,
+                'audit_type' => 'Audit Lapangan',
+                'lead_auditor_id' => $lead->id,
+            ]))
+            ->assertOk()
+            ->assertSee('Audit Arunika 2026')
+            ->assertDontSee('Audit Sawit 2026')
+            ->assertSee('Cari project, kode, atau perusahaan...')
+            ->assertSee('value="arunika"', false)
+            ->assertSee('Reset Filter');
+    }
+
+    public function test_project_list_shows_filtered_empty_state(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.index', ['search' => 'tidak-ada']))
+            ->assertOk()
+            ->assertSee('Tidak ada project yang sesuai dengan pencarian atau filter.');
+    }
+
+    public function test_project_status_filter_uses_simplified_user_facing_groups(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $statuses = [
+            'Belum Dimulai' => [
+                AuditProjectStatus::Draft,
+                AuditProjectStatus::TeamSetup,
+                AuditProjectStatus::Assignment,
+            ],
+            'Berjalan' => [
+                AuditProjectStatus::InProgress,
+                AuditProjectStatus::Review,
+            ],
+            'Selesai' => [AuditProjectStatus::Final],
+            'Diarsipkan' => [AuditProjectStatus::Archived],
+        ];
+
+        foreach ($statuses as $label => $internalStatuses) {
+            foreach ($internalStatuses as $status) {
+                AuditProject::factory()->create([
+                    'name' => $label.' '.$status->value,
+                    'status' => $status->value,
+                ]);
+            }
+        }
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.index', ['status' => 'not_started']))
+            ->assertOk()
+            ->assertSee('Belum Dimulai')
+            ->assertSee('not_started', false)
+            ->assertDontSee('Berjalan in_progress')
+            ->assertDontSee('Selesai final');
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.index', ['status' => 'running']))
+            ->assertOk()
+            ->assertSee('Berjalan')
+            ->assertSee('Berjalan in_progress')
+            ->assertSee('Berjalan review')
+            ->assertDontSee('Belum Dimulai draft');
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.index', ['status' => 'completed']))
+            ->assertOk()
+            ->assertSee('Selesai final')
+            ->assertDontSee('Berjalan review');
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.index', ['status' => 'archived']))
+            ->assertOk()
+            ->assertSee('Diarsipkan archived')
+            ->assertDontSee('Selesai final');
+
+        $this->actingAs($admin)
+            ->get(route('audit-projects.index'))
+            ->assertOk()
+            ->assertSee('Semua Status')
+            ->assertSee('Belum Dimulai')
+            ->assertSee('Berjalan')
+            ->assertSee('Selesai')
+            ->assertSee('Diarsipkan')
+            ->assertDontSee('Penyusunan Tim')
+            ->assertDontSee('Penugasan Indikator');
+    }
+
     public function test_project_code_is_unique_at_database_level(): void
     {
         $admin = User::factory()->admin()->create();
@@ -175,7 +302,11 @@ class AuditProjectCreationTest extends TestCase
             ->assertSee('Luas lahan')
             ->assertSee('Tanggal mulai audit')
             ->assertSee('Tanggal selesai audit')
-            ->assertSee('Lead Auditor');
+            ->assertSee('Lead Auditor')
+            ->assertSee('Anggota Auditor')
+            ->assertSee('Cari nama atau email...')
+            ->assertSee('data-auditor-picker', false)
+            ->assertDontSee('Tekan Ctrl');
     }
 
     public function test_project_creation_requires_the_expected_fields(): void

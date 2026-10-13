@@ -8,7 +8,9 @@ use App\Enums\AuditResultWorkflowStatus;
 use App\Models\AuditIndicatorResult;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
+use App\Models\AuditResultBlock;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -22,6 +24,8 @@ use Illuminate\Validation\ValidationException;
  */
 class AuditResultService
 {
+    public function __construct(private readonly AuditResultDocument $documents) {}
+
     /**
      * Create or update the draft Hasil Audit of an indicator.
      *
@@ -62,7 +66,7 @@ class AuditResultService
                     $this->throwLockConflict();
                 }
 
-                return $this->createResult($project, $indicator, $actor, $resultText, $assessmentStatus);
+                return $this->createResult($project, $indicator, $actor, $resultText, null, $assessmentStatus);
             }
 
             if ($expectedLockVersion !== $result->lock_version) {
@@ -82,15 +86,271 @@ class AuditResultService
                 return $result;
             }
 
-            return $this->persistUpdatedResult($project, $indicator, $actor, $result, $resultText, $assessmentStatus);
+            return $this->persistUpdatedResult($project, $indicator, $actor, $result, $resultText, null, $assessmentStatus);
         });
     }
 
-    private function createResult(AuditProject $project, AuditProjectIndicator $indicator, User $actor, string $resultText, ?AuditAssessmentStatus $assessmentStatus): AuditIndicatorResult
+    /**
+     * @param  array<string, mixed>  $document
+     */
+    public function saveDocumentDraft(
+        AuditProject $project,
+        AuditProjectIndicator $indicator,
+        User $actor,
+        array $document,
+        int $expectedLockVersion,
+        ?AuditAssessmentStatus $assessmentStatus = null,
+    ): AuditIndicatorResult {
+        $this->assertIndicatorBelongsToProject($project, $indicator);
+        $this->assertProjectInProgress($project);
+        $this->assertActorIsPic($project, $indicator, $actor);
+
+        $normalizedDocument = $this->documents->normalize($document, $project, $indicator);
+        $resultText = $this->documents->toPlainText($normalizedDocument);
+
+        return DB::transaction(function () use ($project, $indicator, $actor, $normalizedDocument, $resultText, $expectedLockVersion, $assessmentStatus): AuditIndicatorResult {
+            $result = AuditIndicatorResult::query()
+                ->where('audit_project_id', $project->id)
+                ->where('audit_project_indicator_id', $indicator->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($result === null) {
+                if ($expectedLockVersion !== 0) {
+                    $this->throwLockConflict();
+                }
+
+                return $this->createResult($project, $indicator, $actor, $resultText, $normalizedDocument, $assessmentStatus);
+            }
+
+            if ($expectedLockVersion !== $result->lock_version) {
+                $this->throwLockConflict();
+            }
+
+            if (! in_array($result->workflow_status, [
+                AuditResultWorkflowStatus::Draft,
+                AuditResultWorkflowStatus::RevisionRequested,
+            ], true)) {
+                throw ValidationException::withMessages([
+                    'workflow_status' => 'Hasil Audit yang telah dikirim tidak dapat diubah.',
+                ]);
+            }
+
+            if (
+                $result->result_text === $resultText
+                && $result->result_content === $normalizedDocument
+                && $result->assessment_status === $assessmentStatus
+            ) {
+                return $result;
+            }
+
+            $result = $this->persistUpdatedResult($project, $indicator, $actor, $result, $resultText, $normalizedDocument, $assessmentStatus);
+            $result->blocks()->delete();
+
+            return $result;
+        });
+    }
+
+    /**
+     * Persist the structured Hasil Audit blocks and keep result_text as the
+     * plain-text compatibility representation used by the current workflow.
+     *
+     * @param  array<int, array{type?: string, level?: int|string, text?: string, content?: string}>  $blocks
+     */
+    public function saveStructuredDraft(
+        AuditProject $project,
+        AuditProjectIndicator $indicator,
+        User $actor,
+        array $blocks,
+        int $expectedLockVersion,
+        ?AuditAssessmentStatus $assessmentStatus = null,
+    ): AuditIndicatorResult {
+        $this->assertIndicatorBelongsToProject($project, $indicator);
+        $this->assertProjectInProgress($project);
+        $this->assertActorIsPic($project, $indicator, $actor);
+
+        $normalizedBlocks = $this->normalizeBlocks($blocks);
+
+        if ($normalizedBlocks === []) {
+            throw ValidationException::withMessages([
+                'result_blocks' => 'Minimal satu poin Hasil Audit harus diisi.',
+            ]);
+        }
+
+        $resultText = $this->renderBlocksAsPlainText($normalizedBlocks);
+
+        return DB::transaction(function () use ($project, $indicator, $actor, $normalizedBlocks, $resultText, $expectedLockVersion, $assessmentStatus): AuditIndicatorResult {
+            $result = AuditIndicatorResult::query()
+                ->where('audit_project_id', $project->id)
+                ->where('audit_project_indicator_id', $indicator->id)
+                ->with('blocks')
+                ->lockForUpdate()
+                ->first();
+
+            if ($result === null) {
+                if ($expectedLockVersion !== 0) {
+                    $this->throwLockConflict();
+                }
+
+                $result = $this->createResult($project, $indicator, $actor, $resultText, null, $assessmentStatus);
+                $this->replaceBlocks($project, $indicator, $actor, $result, $normalizedBlocks);
+
+                return $result->load('blocks');
+            }
+
+            if ($expectedLockVersion !== $result->lock_version) {
+                $this->throwLockConflict();
+            }
+
+            if (! in_array($result->workflow_status, [
+                AuditResultWorkflowStatus::Draft,
+                AuditResultWorkflowStatus::RevisionRequested,
+            ], true)) {
+                throw ValidationException::withMessages([
+                    'workflow_status' => 'Hasil Audit yang telah dikirim tidak dapat diubah.',
+                ]);
+            }
+
+            if (
+                $result->result_text === $resultText
+                && $result->assessment_status === $assessmentStatus
+                && $this->blocksMatch($result->blocks, $normalizedBlocks)
+            ) {
+                return $result;
+            }
+
+            $result = $this->persistUpdatedResult($project, $indicator, $actor, $result, $resultText, null, $assessmentStatus);
+            $this->replaceBlocks($project, $indicator, $actor, $result, $normalizedBlocks);
+
+            return $result->load('blocks');
+        });
+    }
+
+    /**
+     * @param  array<int, array{type?: string, level?: int|string, text?: string, content?: string}>  $blocks
+     * @return array<int, array{type: string, level: int, content: string, sort_order: int}>
+     */
+    private function normalizeBlocks(array $blocks): array
+    {
+        $normalized = [];
+
+        foreach (array_values($blocks) as $index => $block) {
+            $content = trim((string) ($block['text'] ?? $block['content'] ?? ''));
+
+            if ($content === '') {
+                continue;
+            }
+
+            $level = max(1, min(AuditResultBlock::MaxLevel, (int) ($block['level'] ?? 1)));
+
+            $normalized[] = [
+                'type' => AuditResultBlock::TypeListItem,
+                'level' => $level,
+                'content' => $this->stripStoredNumbering($content),
+                'sort_order' => ($index + 1) * 10,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<int, array{type: string, level: int, content: string, sort_order: int}>  $blocks
+     */
+    private function renderBlocksAsPlainText(array $blocks): string
+    {
+        $counters = [1 => 0, 2 => 0, 3 => 0];
+        $lines = [];
+
+        foreach ($blocks as $block) {
+            $level = $block['level'];
+            $counters[$level]++;
+
+            for ($resetLevel = $level + 1; $resetLevel <= AuditResultBlock::MaxLevel; $resetLevel++) {
+                $counters[$resetLevel] = 0;
+            }
+
+            $lines[] = str_repeat('   ', $level - 1)
+                .$this->markerForLevel($level, $counters[$level])
+                .' '
+                .$block['content'];
+        }
+
+        return implode(PHP_EOL, $lines);
+    }
+
+    private function markerForLevel(int $level, int $number): string
+    {
+        return match ($level) {
+            2 => $this->letterMarker($number).'.',
+            3 => $number.')',
+            default => $number.'.',
+        };
+    }
+
+    private function letterMarker(int $number): string
+    {
+        $letters = '';
+
+        while ($number > 0) {
+            $number--;
+            $letters = chr(97 + ($number % 26)).$letters;
+            $number = intdiv($number, 26);
+        }
+
+        return $letters;
+    }
+
+    private function stripStoredNumbering(string $content): string
+    {
+        return trim((string) preg_replace('/^\s*(?:\d+[\.)]|[a-zA-Z][\.)])\s*/', '', $content));
+    }
+
+    /**
+     * @param  Collection<int, AuditResultBlock>  $existingBlocks
+     * @param  array<int, array{type: string, level: int, content: string, sort_order: int}>  $blocks
+     */
+    private function blocksMatch(Collection $existingBlocks, array $blocks): bool
+    {
+        $existing = $existingBlocks
+            ->map(fn (AuditResultBlock $block): array => [
+                'type' => $block->type,
+                'level' => $block->level,
+                'content' => $block->content,
+                'sort_order' => $block->sort_order,
+            ])
+            ->values()
+            ->all();
+
+        return $existing === $blocks;
+    }
+
+    /**
+     * @param  array<int, array{type: string, level: int, content: string, sort_order: int}>  $blocks
+     */
+    private function replaceBlocks(AuditProject $project, AuditProjectIndicator $indicator, User $actor, AuditIndicatorResult $result, array $blocks): void
+    {
+        $result->blocks()->delete();
+
+        foreach ($blocks as $block) {
+            $result->blocks()->create([
+                'audit_project_id' => $project->id,
+                'audit_project_indicator_id' => $indicator->id,
+                'type' => $block['type'],
+                'level' => $block['level'],
+                'content' => $block['content'],
+                'sort_order' => $block['sort_order'],
+                'created_by' => $actor->id,
+            ]);
+        }
+    }
+
+    private function createResult(AuditProject $project, AuditProjectIndicator $indicator, User $actor, string $resultText, ?array $resultContent, ?AuditAssessmentStatus $assessmentStatus): AuditIndicatorResult
     {
         $result = $project->results()->create([
             'audit_project_indicator_id' => $indicator->id,
             'result_text' => $resultText,
+            'result_content' => $resultContent,
             'assessment_status' => $assessmentStatus,
             'created_by' => $actor->id,
             'updated_by' => $actor->id,
@@ -98,7 +358,7 @@ class AuditResultService
             'workflow_status' => AuditResultWorkflowStatus::Draft,
         ]);
 
-        $this->recordVersion($result, 1, $resultText, $assessmentStatus, $actor, $project, $indicator);
+        $this->recordVersion($result, 1, $resultText, $resultContent, $assessmentStatus, $actor, $project, $indicator);
         $this->log($project, $actor, 'audit_result.created', sprintf(
             'Draft Hasil Audit indikator "%s" dibuat.',
             $indicator->code,
@@ -110,18 +370,19 @@ class AuditResultService
         return $result;
     }
 
-    private function persistUpdatedResult(AuditProject $project, AuditProjectIndicator $indicator, User $actor, AuditIndicatorResult $result, string $resultText, ?AuditAssessmentStatus $assessmentStatus): AuditIndicatorResult
+    private function persistUpdatedResult(AuditProject $project, AuditProjectIndicator $indicator, User $actor, AuditIndicatorResult $result, string $resultText, ?array $resultContent, ?AuditAssessmentStatus $assessmentStatus): AuditIndicatorResult
     {
         $nextVersion = (int) $result->versions()->max('version_number') + 1;
 
         $result->update([
             'result_text' => $resultText,
+            'result_content' => $resultContent,
             'assessment_status' => $assessmentStatus,
             'updated_by' => $actor->id,
             'lock_version' => $result->lock_version + 1,
         ]);
 
-        $this->recordVersion($result, $nextVersion, $resultText, $assessmentStatus, $actor, $project, $indicator);
+        $this->recordVersion($result, $nextVersion, $resultText, $resultContent, $assessmentStatus, $actor, $project, $indicator);
         $this->log($project, $actor, 'audit_result.updated', sprintf(
             'Draft Hasil Audit indikator "%s" diperbarui.',
             $indicator->code,
@@ -133,13 +394,14 @@ class AuditResultService
         return $result;
     }
 
-    private function recordVersion(AuditIndicatorResult $result, int $versionNumber, string $content, ?AuditAssessmentStatus $assessmentStatus, User $actor, AuditProject $project, AuditProjectIndicator $indicator): void
+    private function recordVersion(AuditIndicatorResult $result, int $versionNumber, string $content, ?array $resultContent, ?AuditAssessmentStatus $assessmentStatus, User $actor, AuditProject $project, AuditProjectIndicator $indicator): void
     {
         $result->versions()->create([
             'audit_project_id' => $project->id,
             'audit_project_indicator_id' => $indicator->id,
             'version_number' => $versionNumber,
             'result_text' => $content,
+            'result_content' => $resultContent,
             'assessment_status' => $assessmentStatus,
             'changed_by' => $actor->id,
             'created_at' => now(),

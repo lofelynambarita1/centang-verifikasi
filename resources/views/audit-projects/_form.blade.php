@@ -1,3 +1,9 @@
+@php
+    $selectedAuditorIds = collect(old('auditor_ids', []))
+        ->map(fn ($id): int => (int) $id)
+        ->all();
+@endphp
+
 @if ($errors->any())
     <div class="form-error" role="alert">{{ $errors->first() }}</div>
 @endif
@@ -9,7 +15,7 @@
     </div>
 
     <div class="field">
-        <label for="template_id">Template audit</label>
+        <label for="template_id">Acuan audit ISPO</label>
         <select id="template_id" name="template_id" required>
             <option value="">— Pilih template —</option>
             @foreach ($templates as $template)
@@ -30,7 +36,7 @@
                 </option>
             @endforeach
         </select>
-        <span class="cell-meta">Belum ada klien? Tambahkan lewat menu Perusahaan (legacy).</span>
+        <span class="cell-meta">Belum ada perusahaan? Tambahkan melalui menu Perusahaan.</span>
     </div>
 
     <div class="field">
@@ -66,28 +72,30 @@
         </div>
 
         <div class="field">
-            <label for="auditor_ids">Anggota auditor (boleh lebih dari satu)</label>
-            <select id="auditor_ids" name="auditor_ids[]" multiple size="6" style="min-height: 132px;">
-                @foreach ($auditors as $auditor)
-                    <option value="{{ $auditor->id }}" @selected(in_array($auditor->id, old('auditor_ids', []), true))>
-                        {{ $auditor->name }} &lt;{{ $auditor->email }}&gt;
-                    </option>
-                @endforeach
-            </select>
-            <span class="cell-meta">Tekan Ctrl (atau Cmd di Mac) untuk memilih lebih dari satu. Lead dimasukkan otomatis sebagai anggota.</span>
+            <label for="auditor-search">Anggota Auditor</label>
+            <div class="auditor-picker" data-auditor-picker>
+                <button class="auditor-picker__trigger" type="button" aria-expanded="false" aria-controls="auditor-picker-options">
+                    <span data-auditor-summary>Belum ada anggota dipilih</span>
+                    <span aria-hidden="true">⌄</span>
+                </button>
+                <div class="auditor-picker__menu" id="auditor-picker-options" hidden>
+                    <input id="auditor-search" class="auditor-picker__search" type="search" placeholder="Cari nama atau email..." autocomplete="off" data-auditor-search>
+                    <div class="auditor-picker__options" role="group" aria-label="Daftar auditor">
+                        @foreach ($auditors as $auditor)
+                            <label class="auditor-picker__option" data-auditor-option data-auditor-text="{{ strtolower($auditor->name.' '.$auditor->email) }}" data-auditor-id="{{ $auditor->id }}">
+                                <input type="checkbox" name="auditor_ids[]" value="{{ $auditor->id }}" @checked(in_array($auditor->id, $selectedAuditorIds, true)) data-auditor-checkbox>
+                                <span>
+                                    <strong>{{ $auditor->name }}</strong>
+                                    <small>{{ $auditor->email }}</small>
+                                </span>
+                            </label>
+                        @endforeach
+                    </div>
+                    <p class="auditor-picker__empty" data-auditor-empty hidden>Auditor tidak ditemukan.</p>
+                </div>
+            </div>
+            <span class="cell-meta">Lead Auditor otomatis menjadi bagian dari tim.</span>
         </div>
     @endif
 
-    @if ($project)
-        <div class="field">
-            <label for="status">Status</label>
-            <select id="status" name="status" required>
-                @foreach (\App\Enums\AuditProjectStatus::cases() as $status)
-                    <option value="{{ $status->value }}" @selected(old('status', $project->status->value) === $status->value)>
-                        {{ $status->label() }}
-                    </option>
-                @endforeach
-            </select>
-        </div>
-    @endif
 </div>

@@ -18,7 +18,7 @@
                     @endif
                     <span class="structure-node__meta">{{ $indicatorCountsByPrinciple[$model->id] ?? 0 }} indikator</span>
                 </div>
-                @if ($canManage)
+                @if ($canManage && ($showBulkControls ?? true))
                     <form class="assignment-bulk" method="POST" action="{{ route('audit-projects.assignments.bulk', $project) }}">
                         @csrf
                         <input type="hidden" name="node_type" value="principle">
@@ -57,7 +57,7 @@
                     @endif
                     <span class="structure-node__meta">{{ $indicatorCountsBySection[$model->id] ?? 0 }} indikator</span>
                 </div>
-                @if ($canManage)
+                @if ($canManage && ($showBulkControls ?? true))
                     <form class="assignment-bulk" method="POST" action="{{ route('audit-projects.assignments.bulk', $project) }}">
                         @csrf
                         <input type="hidden" name="node_type" value="section">

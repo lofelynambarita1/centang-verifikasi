@@ -25,6 +25,8 @@ class AuditProgressService
      *     indicators_with_result: int,
      *     filling_percentage: float,
      *     completeness_percentage: float
+     *     completed: int,
+     *     completion_percentage: float
      * }
      */
     public function projectSummary(AuditProject $project): array
@@ -118,6 +120,26 @@ class AuditProgressService
         });
     }
 
+    public function reviewQueue(AuditProject $project, ?string $workflowStatus = 'submitted', ?int $auditorId = null): Collection
+    {
+        return $this->indicators($project)
+            ->filter(function (AuditProjectIndicator $indicator) use ($workflowStatus, $auditorId): bool {
+                $matchesStatus = $workflowStatus === 'all'
+                    || $indicator->result?->workflow_status?->value === $workflowStatus;
+                $matchesAuditor = $auditorId === null || $indicator->assignment?->pic_user_id === $auditorId;
+
+                return $matchesStatus && $matchesAuditor;
+            })
+            ->sortBy(function (AuditProjectIndicator $indicator): array {
+                return [
+                    $indicator->result?->submitted_at?->timestamp ?? PHP_INT_MAX,
+                    $indicator->sort_order,
+                    $indicator->id,
+                ];
+            })
+            ->values();
+    }
+
     /**
      * @return array{
      *     total: int,
@@ -129,7 +151,9 @@ class AuditProgressService
      *     approved: int,
      *     indicators_with_result: int,
      *     filling_percentage: float,
-     *     completeness_percentage: float
+     *     completeness_percentage: float,
+     *     completed: int,
+     *     completion_percentage: float
      * }
      */
     public function userSummary(AuditProject $project, User $user): array
@@ -199,6 +223,8 @@ class AuditProgressService
             'indicators_with_result' => $withResult,
             'filling_percentage' => $this->percentage($withResult, $total),
             'completeness_percentage' => $this->percentage($draftComplete, $total),
+            'completed' => $approved,
+            'completion_percentage' => $this->percentage($approved, $total),
         ];
     }
 
@@ -212,7 +238,7 @@ class AuditProgressService
         }
 
         return $project->snapshotIndicators()
-            ->with(['section.principle', 'assignment.pic', 'result'])
+            ->with(['section.principle', 'assignment.pic', 'result', 'activeEvidences'])
             ->get();
     }
 

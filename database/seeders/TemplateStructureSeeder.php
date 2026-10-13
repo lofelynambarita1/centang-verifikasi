@@ -13,7 +13,7 @@ class TemplateStructureSeeder extends Seeder
     public function run(): void
     {
         $template = app(TemplateJsonImporter::class)
-            ->importFromPath(database_path('data/ispo_fro_8603_v1_1.json'));
+            ->importFromConfig();
 
         $tree = $template->principles()->with([
             'sections.children', 'sections.indicators.parameters',

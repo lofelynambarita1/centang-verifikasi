@@ -64,7 +64,21 @@ class AuditProjectIndicatorPolicy
 
     public function review(User $user, AuditProjectIndicator $indicator): bool
     {
-        return $indicator->project->status === AuditProjectStatus::InProgress
-            && $indicator->project->userIsLead($user);
+        if ($indicator->project->status !== AuditProjectStatus::InProgress
+            || ! $indicator->project->userIsLead($user)) {
+            return false;
+        }
+
+        return $indicator->assignment?->pic_user_id !== $user->id;
+    }
+
+    public function finalize(User $user, AuditProjectIndicator $indicator): bool
+    {
+        if ($indicator->project->status !== AuditProjectStatus::InProgress
+            || ! $indicator->project->userIsLead($user)) {
+            return false;
+        }
+
+        return $indicator->assignment?->pic_user_id === $user->id;
     }
 }

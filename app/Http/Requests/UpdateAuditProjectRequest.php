@@ -31,7 +31,7 @@ class UpdateAuditProjectRequest extends FormRequest
             'audit_start_date' => ['required', 'date'],
             'audit_end_date' => ['required', 'date', 'after_or_equal:audit_start_date'],
             'land_area' => ['nullable', 'numeric', 'min:0'],
-            'status' => ['required', Rule::enum(AuditProjectStatus::class)],
+            'status' => ['sometimes', Rule::enum(AuditProjectStatus::class)],
         ];
     }
 }

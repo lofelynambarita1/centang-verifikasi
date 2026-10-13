@@ -27,6 +27,7 @@ class AuditIndicatorResultVersionFactory extends Factory
             'audit_project_indicator_id' => AuditProjectIndicator::factory(),
             'version_number' => 1,
             'result_text' => $this->faker->paragraph(),
+            'result_content' => null,
             'changed_by' => User::factory()->auditor(),
             'created_at' => now(),
         ];

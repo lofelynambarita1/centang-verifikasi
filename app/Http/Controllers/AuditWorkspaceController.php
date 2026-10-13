@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ApproveAuditResultRequest;
+use App\Http\Requests\FinalizeOwnIndicatorRequest;
 use App\Http\Requests\RequestAuditResultRevisionRequest;
 use App\Http\Requests\SaveDraftResultRequest;
 use App\Http\Requests\SubmitAuditResultRequest;
@@ -35,18 +36,19 @@ class AuditWorkspaceController extends Controller
 
         $this->authorize('view', $indicator);
 
-        $project = $auditProject->load('template', 'company', 'leadMember.user');
+        $project = $auditProject->load('template', 'company', 'leadMember.user', 'members');
         $indicator->load(['section.principle', 'parameters', 'assignment.pic', 'activeEvidences.uploader']);
 
         $result = AuditIndicatorResult::query()
             ->where('audit_project_indicator_id', $indicator->id)
-            ->with(['versions.changedBy', 'submitter', 'approver', 'reviewEvents.actor'])
+            ->with(['blocks', 'versions.changedBy', 'submitter', 'approver', 'reviewEvents.actor'])
             ->first();
 
         $user = auth()->user();
 
         return view('audit-projects.workspace', [
             'project' => $project,
+            'projectRoleLabel' => $project->members->firstWhere('user_id', $user->id)?->project_role?->label(),
             'indicator' => $indicator,
             'result' => $result,
             'canEdit' => $user->can('update', $indicator),
@@ -55,6 +57,11 @@ class AuditWorkspaceController extends Controller
                 && $result->assessment_status !== null
                 && trim((string) $result->result_text) !== ''
                 && $user->can('update', $indicator),
+            'canFinalizeOwnIndicator' => $result !== null
+                && in_array($result->workflow_status?->value, ['draft', 'revision_requested'], true)
+                && $result->assessment_status !== null
+                && trim((string) $result->result_text) !== ''
+                && $user->can('finalize', $indicator),
             'canReview' => $user->can('review', $indicator),
             'versions' => $result?->versions->sortByDesc('version_number')->take(3) ?? collect(),
             'navigation' => $this->navigation($project, $user, $indicator),
@@ -74,14 +81,34 @@ class AuditWorkspaceController extends Controller
 
         $this->authorize('update', $indicator);
 
-        $this->results->saveDraft(
-            $auditProject,
-            $indicator,
-            $request->user(),
-            $request->string('result_text')->trim()->toString(),
-            $request->expectedLockVersion(),
-            $request->assessmentStatus(),
-        );
+        if ($request->hasResultContent()) {
+            $this->results->saveDocumentDraft(
+                $auditProject,
+                $indicator,
+                $request->user(),
+                $request->resultContent(),
+                $request->expectedLockVersion(),
+                $request->assessmentStatus(),
+            );
+        } elseif ($request->hasStructuredBlocks()) {
+            $this->results->saveStructuredDraft(
+                $auditProject,
+                $indicator,
+                $request->user(),
+                $request->structuredBlocks(),
+                $request->expectedLockVersion(),
+                $request->assessmentStatus(),
+            );
+        } else {
+            $this->results->saveDraft(
+                $auditProject,
+                $indicator,
+                $request->user(),
+                $request->string('result_text')->trim()->toString(),
+                $request->expectedLockVersion(),
+                $request->assessmentStatus(),
+            );
+        }
 
         return back()->with('success', 'Draft Hasil Audit disimpan.');
     }
@@ -93,14 +120,32 @@ class AuditWorkspaceController extends Controller
         $this->authorize('update', $indicator);
 
         try {
-            $result = $this->results->saveDraft(
-                $auditProject,
-                $indicator,
-                $request->user(),
-                $request->string('result_text')->trim()->toString(),
-                $request->expectedLockVersion(),
-                $request->assessmentStatus(),
-            );
+            $result = $request->hasResultContent()
+                ? $this->results->saveDocumentDraft(
+                    $auditProject,
+                    $indicator,
+                    $request->user(),
+                    $request->resultContent(),
+                    $request->expectedLockVersion(),
+                    $request->assessmentStatus(),
+                )
+                : ($request->hasStructuredBlocks()
+                    ? $this->results->saveStructuredDraft(
+                        $auditProject,
+                        $indicator,
+                        $request->user(),
+                        $request->structuredBlocks(),
+                        $request->expectedLockVersion(),
+                        $request->assessmentStatus(),
+                    )
+                    : $this->results->saveDraft(
+                        $auditProject,
+                        $indicator,
+                        $request->user(),
+                        $request->string('result_text')->trim()->toString(),
+                        $request->expectedLockVersion(),
+                        $request->assessmentStatus(),
+                    ));
         } catch (ValidationException $exception) {
             $errors = $exception->errors();
 
@@ -176,6 +221,26 @@ class AuditWorkspaceController extends Controller
         );
 
         return back()->with('success', 'Hasil Audit disetujui.');
+    }
+
+    public function finalizeOwnIndicator(
+        FinalizeOwnIndicatorRequest $request,
+        AuditProject $auditProject,
+        AuditProjectIndicator $indicator,
+    ): RedirectResponse {
+        abort_if($indicator->audit_project_id !== $auditProject->id, 404);
+
+        $this->authorize('finalize', $indicator);
+
+        $this->workflow->finalizeOwnIndicator(
+            $auditProject,
+            $indicator,
+            $request->user(),
+            $request->expectedLockVersion(),
+            $request->validated('note'),
+        );
+
+        return back()->with('success', 'Indikator Anda diselesaikan dan langsung disetujui.');
     }
 
     /**

@@ -4,10 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCompanyRequest;
 use App\Models\Company;
-use App\Support\IspoChecklist;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\DB;
 
 class CompanyController extends Controller
 {
@@ -16,7 +15,7 @@ class CompanyController extends Controller
      */
     public function index(): View
     {
-        return view('companies.index', ['companies' => Company::with('audits.items')->latest()->get()]);
+        return view('companies.index', ['companies' => Company::latest()->get()]);
     }
 
     /**
@@ -32,22 +31,9 @@ class CompanyController extends Controller
      */
     public function store(StoreCompanyRequest $request): RedirectResponse
     {
-        $company = DB::transaction(function () use ($request): Company {
-            $company = Company::create($request->safe()->except('due_date'));
-            $audit = $company->audits()->create([
-                'title' => 'Audit kepatuhan operasional',
-                'status' => 'pending',
-                'auditor_name' => 'Arif Rahman',
-                'due_date' => $request->date('due_date'),
-            ]);
-            $audit->items()->createMany(self::checklistItems());
+        $company = Company::create($request->validated());
 
-            return $company;
-        });
-
-        $audit = $company->audits()->latest()->firstOrFail();
-
-        return redirect()->route('audits.show', $audit)->with('success', 'Perusahaan dan prinsip audit berhasil dibuat.');
+        return redirect()->route('companies.show', $company)->with('success', 'Data perusahaan berhasil disimpan.');
     }
 
     /**
@@ -55,7 +41,7 @@ class CompanyController extends Controller
      */
     public function show(Company $company): View
     {
-        return view('companies.show', ['company' => $company->load(['audits.items'])]);
+        return view('companies.show', ['company' => $company->load(['auditProjects' => fn (HasMany $query): HasMany => $query->latest()])]);
     }
 
     /**
@@ -71,7 +57,7 @@ class CompanyController extends Controller
      */
     public function update(StoreCompanyRequest $request, Company $company): RedirectResponse
     {
-        $company->update($request->safe()->except('due_date'));
+        $company->update($request->validated());
 
         return redirect()->route('companies.show', $company)->with('success', 'Data perusahaan diperbarui.');
     }
@@ -84,22 +70,5 @@ class CompanyController extends Controller
         $company->delete();
 
         return redirect()->route('companies.index')->with('success', 'Perusahaan dihapus.');
-    }
-
-    /**
-     * Canonical ISPO checklist items (same 7 principles for every company),
-     * ready to be inserted into a new audit.
-     *
-     * @return array<int, array{title: string, description: ?string, sort_order: int, status: string}>
-     */
-    private static function checklistItems(): array
-    {
-        $items = [];
-
-        foreach (IspoChecklist::items() as $position => $item) {
-            $items[] = $item + ['sort_order' => $position, 'status' => 'pending'];
-        }
-
-        return $items;
     }
 }

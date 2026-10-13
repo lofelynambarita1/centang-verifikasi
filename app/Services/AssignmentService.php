@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\AuditProjectStatus;
+use App\Enums\ProjectRole;
 use App\Models\AuditIndicatorAssignment;
 use App\Models\AuditProject;
 use App\Models\AuditProjectIndicator;
@@ -106,66 +107,89 @@ class AssignmentService
     }
 
     /**
-     * Automatically distribute only the UNASSIGNED indicators of the project
-     * across the chosen auditors as evenly as possible, based on their current
-     * workload. Existing assignments are never touched.
+     * Automatically distribute wholly unassigned principles across the
+     * project's auditor team. Every descendant indicator receives the
+     * principle's PIC.
+     * Existing principle assignments, including exceptions, are never touched.
      *
-     * @param  array<int>  $picUserIds
+     * @return array{principles: int, indicators: int}
      */
-    public function autoAssign(AuditProject $project, array $picUserIds, User $actor): int
+    public function autoAssign(AuditProject $project, User $actor): array
     {
         $this->assertAssignableStatus($project);
 
-        $members = collect($picUserIds)->map(fn ($id): int => (int) $id)->unique()->values();
+        $members = $project->members()
+            ->whereIn('project_role', [ProjectRole::LeadAuditor->value, ProjectRole::Auditor->value])
+            ->orderBy('id')
+            ->pluck('user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->values();
 
         if ($members->isEmpty()) {
             throw ValidationException::withMessages([
-                'pic_user_ids' => 'Pilih minimal satu auditor untuk pembagian otomatis.',
+                'team' => 'Project belum memiliki anggota auditor untuk pembagian otomatis.',
             ]);
         }
 
-        $members->each(function (int $userId) use ($project): void {
-            $this->ensureProjectMember($project, User::findOrFail($userId));
-        });
+        $principles = $project->snapshotPrinciples()->get(['id', 'code']);
+        $sections = $project->snapshotSections()->get(['id', 'audit_project_principle_id', 'parent_id']);
+        $indicators = $project->snapshotIndicators()->get(['id', 'audit_project_section_id']);
+        $assignments = $project->assignments()
+            ->get(['audit_project_indicator_id', 'pic_user_id'])
+            ->groupBy('audit_project_indicator_id');
+        $indicatorIdsByPrinciple = $indicators->groupBy(
+            fn (AuditProjectIndicator $indicator): int => (int) ($sections->firstWhere('id', $indicator->audit_project_section_id)?->audit_project_principle_id),
+        );
+        $eligiblePrinciples = $principles
+            ->sortBy(fn (object $principle): array => $this->naturalCodeParts((string) $principle->code))
+            ->filter(function (object $principle) use ($indicatorIdsByPrinciple, $assignments): bool {
+                $principleIndicators = $indicatorIdsByPrinciple->get($principle->id, collect());
 
-        $unassigned = $project->snapshotIndicators()
-            ->whereDoesntHave('assignment')
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->pluck('id');
+                return $principleIndicators->isNotEmpty()
+                    && $principleIndicators->every(fn (AuditProjectIndicator $indicator): bool => ! $assignments->has($indicator->id));
+            })
+            ->values();
 
-        if ($unassigned->isEmpty()) {
-            return 0;
+        if ($eligiblePrinciples->isEmpty()) {
+            return ['principles' => 0, 'indicators' => 0];
         }
 
-        $workload = AuditIndicatorAssignment::query()
-            ->where('audit_project_id', $project->id)
-            ->whereIn('pic_user_id', $members)
-            ->selectRaw('pic_user_id, COUNT(*) as total')
-            ->groupBy('pic_user_id')
-            ->pluck('total', 'pic_user_id');
+        $assignedIndicators = 0;
+        $assignedPrinciples = 0;
+        $memberIds = $members->all();
 
-        $assigned = 0;
-
-        DB::transaction(function () use ($project, $unassigned, $members, $workload, $actor, &$assigned): void {
-            foreach ($unassigned as $indicatorId) {
-                $picUserId = $this->nextLowestWorkload($members->all(), $workload);
-                $this->persistAssignment($project, $indicatorId, $picUserId, $actor, 'auto_assigned');
-                $workload[$picUserId] = (int) $workload->get($picUserId, 0) + 1;
-                $assigned++;
+        DB::transaction(function () use ($project, $eligiblePrinciples, $indicatorIdsByPrinciple, $memberIds, $actor, &$assignedIndicators, &$assignedPrinciples): void {
+            foreach ($eligiblePrinciples as $index => $principle) {
+                $picUserId = $memberIds[$index % count($memberIds)];
+                foreach ($indicatorIdsByPrinciple->get($principle->id, collect()) as $indicator) {
+                    $this->persistAssignment($project, $indicator->id, $picUserId, $actor, 'auto_assigned');
+                    $assignedIndicators++;
+                }
+                $assignedPrinciples++;
             }
         });
 
         $this->log($project, $actor, 'assignment.auto_assigned', sprintf(
-            '%d indikator dibagi otomatis kepada %d auditor.',
-            $assigned,
+            '%d prinsip (%d indikator) dibagi otomatis kepada %d auditor.',
+            $assignedPrinciples,
+            $assignedIndicators,
             $members->count(),
         ), [
-            'assigned_count' => $assigned,
+            'assigned_principles' => $assignedPrinciples,
+            'assigned_count' => $assignedIndicators,
             'pic_user_ids' => $members->all(),
         ]);
 
-        return $assigned;
+        return ['principles' => $assignedPrinciples, 'indicators' => $assignedIndicators];
+    }
+
+    /** @return array<int, int|string> */
+    private function naturalCodeParts(string $code): array
+    {
+        return array_map(
+            fn (string $part): int|string => ctype_digit($part) ? (int) $part : $part,
+            preg_split('/[^0-9]+/', $code, -1, PREG_SPLIT_NO_EMPTY) ?: [$code],
+        );
     }
 
     /**
@@ -266,23 +290,6 @@ class AssignmentService
         ]);
 
         return $summary + [$nodeType.'_id' => $nodeId];
-    }
-
-    /**
-     * @param  array<int>  $memberIds
-     * @param  \Illuminate\Support\Collection<int, int>  $workload
-     */
-    private function nextLowestWorkload(array $memberIds, $workload): int
-    {
-        $candidates = array_values($memberIds);
-        usort($candidates, function (int $a, int $b) use ($workload): int {
-            $loadA = (int) $workload->get($a, 0);
-            $loadB = (int) $workload->get($b, 0);
-
-            return $loadA <=> $loadB ?: $a <=> $b;
-        });
-
-        return $candidates[0];
     }
 
     /**

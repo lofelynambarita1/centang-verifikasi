@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AuditProjectStatus;
 use App\Enums\SystemRole;
 use App\Http\Requests\AddProjectMemberRequest;
 use App\Http\Requests\ReplaceLeadAuditorRequest;
@@ -50,7 +51,12 @@ class AuditProjectMemberController extends Controller
         $member = User::findOrFail($request->integer('user_id'));
         $this->projects->addAuditor($auditProject, $member, $request->user());
 
-        return back()->with('success', 'Anggota auditor ditambahkan ke project.');
+        return back()->with(
+            'success',
+            $auditProject->refresh()->status === AuditProjectStatus::Assignment
+                ? 'Tim auditor berhasil disimpan. Project siap untuk pembagian auditor.'
+                : 'Anggota auditor ditambahkan ke project.',
+        );
     }
 
     /**
@@ -63,7 +69,24 @@ class AuditProjectMemberController extends Controller
         $newLead = User::findOrFail($request->integer('new_lead_auditor_id'));
         $this->projects->replaceLeadAuditor($auditProject, $newLead, $request->user());
 
-        return back()->with('success', 'Lead Auditor diganti. Lead lama tetap menjadi auditor project ini.');
+        return back()->with(
+            'success',
+            $auditProject->refresh()->status === AuditProjectStatus::Assignment
+                ? 'Tim auditor berhasil disimpan. Project siap untuk pembagian auditor.'
+                : 'Lead Auditor diganti. Lead lama tetap menjadi auditor project ini.',
+        );
+    }
+
+    /**
+     * Mark team setup complete once the project has a valid team and snapshot.
+     */
+    public function complete(AuditProject $auditProject): RedirectResponse
+    {
+        $this->authorize('manageMembers', $auditProject);
+
+        $this->projects->completeTeamSetup($auditProject, auth()->user());
+
+        return back()->with('success', 'Tim auditor berhasil disimpan. Project siap untuk pembagian auditor.');
     }
 
     /**

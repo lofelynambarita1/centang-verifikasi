@@ -16,13 +16,14 @@ class AuditIndicatorResultVersion extends Model
     public const UPDATED_AT = null;
 
     protected $fillable = [
-        'audit_indicator_result_id', 'audit_project_id', 'audit_project_indicator_id', 'version_number', 'result_text', 'assessment_status', 'changed_by', 'created_at',
+        'audit_indicator_result_id', 'audit_project_id', 'audit_project_indicator_id', 'version_number', 'result_text', 'result_content', 'assessment_status', 'changed_by', 'created_at',
     ];
 
     protected function casts(): array
     {
         return [
             'version_number' => 'integer',
+            'result_content' => 'array',
             'assessment_status' => AuditAssessmentStatus::class,
             'created_at' => 'datetime',
         ];

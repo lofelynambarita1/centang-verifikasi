@@ -35,6 +35,7 @@ class StoreAuditProjectRequest extends FormRequest
             'lead_auditor_id' => ['required', 'integer', 'exists:users,id', new IsSystemAuditor],
             'auditor_ids' => ['nullable', 'array'],
             'auditor_ids.*' => ['integer', 'distinct', 'exists:users,id', new IsSystemAuditor],
+            'confirm_duplicate' => ['nullable', 'boolean'],
         ];
     }
 

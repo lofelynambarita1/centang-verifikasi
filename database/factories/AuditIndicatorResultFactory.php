@@ -24,6 +24,7 @@ class AuditIndicatorResultFactory extends Factory
             'audit_project_id' => AuditProject::factory(),
             'audit_project_indicator_id' => AuditProjectIndicator::factory(),
             'result_text' => $this->faker->paragraph(),
+            'result_content' => null,
             'created_by' => User::factory()->auditor(),
             'updated_by' => User::factory()->auditor(),
             'lock_version' => 1,

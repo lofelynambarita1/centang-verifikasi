@@ -28,7 +28,7 @@
                     → {{ $indicator->section?->title ?? 'Kriteria' }}
                 </b>
             </div>
-            <div class="meta-row"><span>Jenis indikator</span><b>{{ $indicator->indicator_type ?? '-' }}</b></div>
+            <div class="meta-row"><span>Kategori indikator</span><b>{{ $indicator->indicator_type ?: 'Belum tersedia' }}</b></div>
             @if ($indicator->description)
                 <div class="meta-row"><span>Deskripsi</span><b>{{ $indicator->description }}</b></div>
             @endif
@@ -67,7 +67,7 @@
         @else
             <div class="empty">
                 <strong>Tidak ada parameter</strong>
-                <span>Indikator ini belum memiliki Parameter/Verifier pada snapshot project.</span>
+                <span>Indikator ini belum memiliki Parameter/Verifier pada struktur project.</span>
             </div>
         @endif
     </section>

@@ -43,7 +43,6 @@ class TemplateStructureRequest extends FormRequest
                 'code' => ['required', 'string', 'max:100'],
                 'title' => ['required', 'string', 'max:255'],
                 'description' => ['nullable', 'string'],
-                ...$common,
             ],
             'section' => [
                 'principle_id' => [$context, 'integer', Rule::exists('audit_template_principles', 'id')->where('audit_template_id', $this->route('template')->id)],

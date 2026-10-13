@@ -16,7 +16,7 @@ class AuditIndicatorResult extends Model
     use HasFactory;
 
     protected $fillable = [
-        'audit_project_id', 'audit_project_indicator_id', 'result_text', 'assessment_status', 'created_by', 'updated_by', 'lock_version',
+        'audit_project_id', 'audit_project_indicator_id', 'result_text', 'result_content', 'assessment_status', 'created_by', 'updated_by', 'lock_version',
         'workflow_status', 'submitted_at', 'submitted_by', 'approved_at', 'approved_by',
     ];
 
@@ -24,6 +24,7 @@ class AuditIndicatorResult extends Model
     {
         return [
             'assessment_status' => AuditAssessmentStatus::class,
+            'result_content' => 'array',
             'lock_version' => 'integer',
             'workflow_status' => AuditResultWorkflowStatus::class,
             'submitted_at' => 'datetime',
@@ -73,5 +74,11 @@ class AuditIndicatorResult extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(AuditIndicatorResultVersion::class, 'audit_indicator_result_id');
+    }
+
+    /** @return HasMany<AuditResultBlock, $this> */
+    public function blocks(): HasMany
+    {
+        return $this->hasMany(AuditResultBlock::class, 'audit_indicator_result_id')->orderBy('sort_order')->orderBy('id');
     }
 }
