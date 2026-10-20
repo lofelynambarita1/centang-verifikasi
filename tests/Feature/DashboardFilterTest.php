@@ -29,5 +29,27 @@ class DashboardFilterTest extends TestCase
         $response->assertSee('href="#company-progress"', false);
         $response->assertSee('href="#indicator-summary"', false);
         $response->assertSee('href="#recent-audits"', false);
+        $response->assertSee('dashboard-summary-panel', false);
+        $response->assertSee('dashboard-recent-panel', false);
+        $response->assertSee('Ringkasan persentase indikator yang telah dinilai');
+    }
+
+    public function test_dashboard_donut_keeps_small_nonzero_indicator_progress_visible(): void
+    {
+        $user = User::factory()->create();
+        $audit = Company::factory()->create()->audits()->create(['title' => 'Audit progres kecil']);
+        $audit->items()->createMany(array_map(
+            fn (int $order): array => [
+                'title' => 'Indikator '.$order,
+                'sort_order' => $order,
+                'status' => $order === 1 ? 'compliant' : 'pending',
+            ],
+            range(1, 201),
+        ));
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertDontSee('conic-gradient(#14875f 0 0%', false);
     }
 }

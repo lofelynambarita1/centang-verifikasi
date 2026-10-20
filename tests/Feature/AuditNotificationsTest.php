@@ -28,7 +28,11 @@ class AuditNotificationsTest extends TestCase
         $this->actingAs($user)
             ->get(route('notifications.index'))
             ->assertOk()
+            ->assertSee('Total notifikasi')
+            ->assertSee('Belum dibaca')
             ->assertSee('Hasil audit baru')
+            ->assertSee('Hasil baru tersedia untuk audit PT Contoh.')
+            ->assertSee('notification-item__icon', false)
             ->assertSee('app-nav__badge', false);
 
         $this->actingAs($otherUser)
@@ -40,6 +44,26 @@ class AuditNotificationsTest extends TestCase
             ->assertRedirect(route('dashboard'));
 
         $this->assertNotNull($notification->fresh()->read_at);
+    }
+
+    public function test_account_request_notification_is_distinct_and_links_to_account_management(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $admin->notify(new AuditSystemNotification(
+            'role_request',
+            'Permintaan akun baru',
+            'Pemohon Baru meminta pendaftaran akun dan menunggu persetujuan Master Admin.',
+            route('users.index', [], false),
+        ));
+
+        $this->actingAs($admin)
+            ->get(route('notifications.index'))
+            ->assertOk()
+            ->assertSee('notification-item--account-request', false)
+            ->assertSee('Permintaan akun baru')
+            ->assertSee('Pemohon Baru meminta pendaftaran akun')
+            ->assertSee('Tinjau akun')
+            ->assertSee(route('notifications.read', $admin->notifications()->firstOrFail()->id), false);
     }
 
     public function test_role_request_notifies_active_admins_via_database_and_mail(): void

@@ -9,8 +9,8 @@
     };
     $avatarColors = ['avatar--coral', 'avatar--navy', 'avatar--mint', 'avatar--amber', 'avatar--violet'];
     $totalItems = $stats['total_items'];
-    $metPct = $totalItems ? round($stats['met'] / $totalItems * 100) : 0;
-    $notPct = $totalItems ? round($stats['not_met'] / $totalItems * 100) : 0;
+    $metSegment = $totalItems ? $stats['met'] / $totalItems * 100 : 0;
+    $notMetSegment = $totalItems ? $stats['not_met'] / $totalItems * 100 : 0;
     $overallPct = $totalItems ? round($stats['completed_items'] / $totalItems * 100) : 0;
     $pendingCount = max(0, $totalItems - $stats['completed_items']);
 @endphp
@@ -201,9 +201,9 @@
         </section>
 
         <aside class="dash-side">
-            <div class="panel panel--pad" id="indicator-summary">
+            <div class="panel panel--pad dashboard-summary-panel" id="indicator-summary">
                 <div class="panel__head">
-                    <div class="dashboard-section-heading dashboard-section-heading--center">
+                    <div class="dashboard-section-heading">
                         <span class="dashboard-section-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 3v9l7.8 4.5"/>
@@ -217,7 +217,7 @@
                     </div>
                 </div>
                 <div class="donut">
-                    <div class="donut__ring" style="background: conic-gradient(#14875f 0 {{ $metPct }}%, #e0a32c {{ $metPct }}% calc({{ $metPct }}% + {{ $notPct }}%), #e9eeeb calc({{ $metPct }}% + {{ $notPct }}%) 100%);">
+                    <div class="donut__ring" role="img" aria-label="Ringkasan persentase indikator yang telah dinilai" style="background: conic-gradient(#14875f 0 {{ $metSegment }}%, #e0a32c {{ $metSegment }}% calc({{ $metSegment }}% + {{ $notMetSegment }}%), #e9eeeb calc({{ $metSegment }}% + {{ $notMetSegment }}%) 100%);">
                         <div class="donut__inner">
                             <strong>{{ $overallPct }}%</strong>
                             <span>terverifikasi</span>
@@ -232,9 +232,9 @@
                 <div class="donut__foot">{{ $stats['completed_items'] }} dari {{ $totalItems }} indikator telah dinilai</div>
             </div>
 
-            <div class="panel panel--pad" id="recent-audits">
+            <div class="panel panel--pad dashboard-recent-panel" id="recent-audits">
                 <div class="panel__head">
-                    <div class="dashboard-section-heading dashboard-section-heading--center">
+                    <div class="dashboard-section-heading">
                         <span class="dashboard-section-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="9"/>

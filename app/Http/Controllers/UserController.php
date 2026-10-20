@@ -9,6 +9,7 @@ use App\Notifications\AuditSystemNotification;
 use App\Support\NotificationDispatcher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
@@ -52,8 +53,8 @@ class UserController extends Controller
         if ($hasRoleRequest) {
             $notifications->send([$user], new AuditSystemNotification(
                 'role_approved',
-                'Permintaan role disetujui',
-                'Admin telah mengaktifkan akun Anda dengan role '.str_replace('_', ' ', ucfirst($user->role)).'.',
+                'Akun disetujui',
+                'Master Admin telah mengaktifkan akun Anda dengan role '.str_replace('_', ' ', ucfirst($user->role)).'.',
                 route('dashboard', [], false),
             ));
         }
@@ -61,21 +62,27 @@ class UserController extends Controller
         return redirect()->route('users.index')->with('success', 'Data pengguna diperbarui.');
     }
 
-    public function approveRoleRequest(User $user, NotificationDispatcher $notifications): RedirectResponse
-    {
+    public function approveRoleRequest(
+        Request $request,
+        User $user,
+        NotificationDispatcher $notifications,
+    ): RedirectResponse {
         abort_if($user->requested_role === null, 422, 'Tidak ada permintaan role yang perlu disetujui.');
 
-        $requestedRole = $user->requested_role;
-        $user->update(['role' => $requestedRole, 'requested_role' => null]);
+        $validated = $request->validate([
+            'role' => ['required', 'in:admin,lead_audit,auditor'],
+        ]);
+
+        $user->update(['role' => $validated['role'], 'requested_role' => null]);
 
         $notifications->send([$user], new AuditSystemNotification(
             'role_approved',
-            'Permintaan role disetujui',
-            'Admin telah mengaktifkan akun Anda dengan role '.str_replace('_', ' ', ucfirst($requestedRole)).'.',
+            'Akun disetujui',
+            'Master Admin telah menyetujui akun Anda dengan role '.str_replace('_', ' ', ucfirst($validated['role'])).'.',
             route('dashboard', [], false),
         ));
 
-        return redirect()->route('users.index')->with('success', 'Permintaan role berhasil disetujui.');
+        return redirect()->route('users.index')->with('success', 'Akun berhasil disetujui dan role telah ditetapkan.');
     }
 
     public function destroy(User $user): RedirectResponse

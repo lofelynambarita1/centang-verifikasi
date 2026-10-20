@@ -249,6 +249,75 @@ class AuditWorkflowTest extends TestCase
         $this->assertSame('in_progress', $audit->fresh()->status);
     }
 
+    public function test_non_compliant_audit_results_are_highlighted_and_can_be_edited(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit temuan']);
+        $item = $audit->items()->create([
+            'title' => '1.1.1 Izin lokasi',
+            'description' => 'Dokumen izin wajib tersedia.',
+            'sort_order' => 1,
+            'status' => 'non_compliant',
+        ]);
+        $hasil = $item->hasils()->create([
+            'content' => 'Dokumen izin belum tersedia.',
+            'evidence_path' => 'audit-evidence/izin.jpg',
+            'sort_order' => 0,
+        ]);
+
+        $this->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertSee('checklist-item--non-compliant', false)
+            ->assertSee('parameter-box--non-compliant', false)
+            ->assertSee('hasil-block--non-compliant', false)
+            ->assertSee('Tidak memenuhi · Perlu tindak lanjut.', false)
+            ->assertSee('note-box--non-compliant', false)
+            ->assertSee('Catatan hasil audit')
+            ->assertSee('Ganti bukti')
+            ->assertSee('type="file" name="evidence"', false)
+            ->assertSee('Lihat bukti tersimpan')
+            ->assertSee('Simpan perubahan')
+            ->assertSee('Hapus hasil audit')
+            ->assertSee('Dokumen izin belum tersedia.');
+
+        $this->put(route('audit-hasils.update', $hasil), ['content' => 'Izin lokasi sedang diperbaiki.'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('audit_hasils', [
+            'id' => $hasil->id,
+            'content' => 'Izin lokasi sedang diperbaiki.',
+        ]);
+    }
+
+    public function test_non_compliant_status_highlights_results_and_compliant_status_clears_it(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit perubahan status']);
+        $item = $audit->items()->create([
+            'title' => '1.1.1 Izin lokasi',
+            'sort_order' => 1,
+            'status' => 'compliant',
+        ]);
+        $item->hasils()->create(['content' => 'Catatan dapat diperbarui.', 'sort_order' => 0]);
+
+        $this->put(route('audit-items.update', $item), ['status' => 'non_compliant'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('audit_items', ['id' => $item->id, 'status' => 'non_compliant']);
+        $this->get(route('audits.show', $audit))
+            ->assertSee('checklist-item--non-compliant', false)
+            ->assertSee('Tidak memenuhi · Perlu tindak lanjut.')
+            ->assertSee('status-form--non-compliant', false);
+
+        $this->put(route('audit-items.update', $item), ['status' => 'compliant'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('audit_items', ['id' => $item->id, 'status' => 'compliant']);
+        $this->get(route('audits.show', $audit))
+            ->assertDontSee('checklist-item--non-compliant', false)
+            ->assertDontSee('status-form--non-compliant', false);
+    }
+
     public function test_report_shows_every_hasil_audit_entry_and_evidence(): void
     {
         Storage::fake('public');

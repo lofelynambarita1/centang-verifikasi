@@ -191,57 +191,64 @@
                 @php $previousCriteria = $criteriaCode; @endphp
             @endif
 
-            <article class="checklist-item">
+            <article class="checklist-item {{ $item->status === 'non_compliant' ? 'checklist-item--non-compliant' : '' }}" data-audit-item>
                 <div class="checklist-top">
                     <div class="checklist-num">{{ $indicatorCode }}</div>
                     <div class="checklist-body">
                         <p class="checklist-gist">{{ $indicatorTitle }}</p>
-                        <div class="parameter-box">
-                            <div class="parameter-label">Parameter</div>
+                        <div class="parameter-box {{ $item->status === 'non_compliant' ? 'parameter-box--non-compliant' : '' }}">
+                            <div class="parameter-label" data-audit-parameter-label>{{ $item->status === 'non_compliant' ? 'Parameter · Tidak memenuhi' : 'Parameter' }}</div>
                             <div class="parameter-body">{!! nl2br(e($item->description ?: 'Tersedia dokumen dan bukti pendukung sesuai persyaratan.')) !!}</div>
                         </div>
 
-                        <div class="hasil-block">
+                        <div class="hasil-block {{ $item->status === 'non_compliant' ? 'hasil-block--non-compliant' : '' }}">
                             <div class="hasil-head">
                                 <span class="field-label">Hasil Audit</span>
                                 <span class="hasil-count">{{ $item->hasils->count() }} hasil</span>
                             </div>
+                            <p class="hasil-alert" role="status" aria-live="polite" @if ($item->status !== 'non_compliant') hidden @endif>
+                                Tidak memenuhi · Perlu tindak lanjut. Hasil audit di bawah dapat diedit.
+                            </p>
 
                             <div class="hasil-list">
                                 @forelse ($item->hasils as $hasil)
-                                    <div class="hasil-card">
+                                    <div class="hasil-card {{ $item->status === 'non_compliant' ? 'hasil-card--non-compliant' : '' }}">
                                         <form method="POST" action="{{ route('audit-hasils.update', $hasil) }}" enctype="multipart/form-data" class="hasil-form">
                                             @csrf
                                             @method('PUT')
                                             <input type="hidden" name="page" value="{{ $currentPage }}">
-                                            <textarea class="note-box" name="content" rows="2" placeholder="Tulis hasil audit...">{{ old('content', $hasil->content) }}</textarea>
-                                            <div class="hasil-actions">
-                                                <label class="hasil-file">Ganti bukti
-                                                    <input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png">
-                                                </label>
-                                                @if ($hasil->evidence_path)
-                                                    @php
-                                                        $evidenceUrl = Storage::disk('public')->url($hasil->evidence_path);
-                                                        $evidenceExt = strtolower(pathinfo($hasil->evidence_path, PATHINFO_EXTENSION));
-                                                        $isImageEvidence = in_array($evidenceExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
-                                                    @endphp
+                                            <label class="hasil-input-label" for="hasil-{{ $hasil->id }}">Catatan hasil audit</label>
+                                            <textarea id="hasil-{{ $hasil->id }}" class="note-box {{ $item->status === 'non_compliant' ? 'note-box--non-compliant' : '' }}" name="content" rows="3" placeholder="Tulis hasil audit...">{{ old('content', $hasil->content) }}</textarea>
+                                            <div class="hasil-form-footer">
+                                                <div class="hasil-evidence-controls">
+                                                    <div class="hasil-file-picker">
+                                                        <label class="hasil-input-label" for="hasil-bukti-{{ $hasil->id }}">Ganti bukti</label>
+                                                        <input id="hasil-bukti-{{ $hasil->id }}" class="hasil-file-input" type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png" aria-label="Ganti bukti audit">
+                                                    </div>
+                                                    @if ($hasil->evidence_path)
+                                                        @php
+                                                            $evidenceUrl = Storage::disk('public')->url($hasil->evidence_path);
+                                                            $evidenceExt = strtolower(pathinfo($hasil->evidence_path, PATHINFO_EXTENSION));
+                                                            $isImageEvidence = in_array($evidenceExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
+                                                        @endphp
 
-                                                    @if ($isImageEvidence)
-                                                        <a class="evidence-preview-link" href="{{ $evidenceUrl }}" target="_blank" rel="noreferrer">
-                                                            <img class="evidence-thumbnail" src="{{ $evidenceUrl }}" alt="Bukti audit">
-                                                        </a>
+                                                        @if ($isImageEvidence)
+                                                            <a class="evidence-preview-link" href="{{ $evidenceUrl }}" target="_blank" rel="noreferrer" aria-label="Buka pratinjau bukti audit">
+                                                                <img class="evidence-thumbnail" src="{{ $evidenceUrl }}" alt="Bukti audit">
+                                                            </a>
+                                                        @endif
+
+                                                        <a class="hasil-evidence-link" href="{{ $evidenceUrl }}" target="_blank" rel="noreferrer">Lihat bukti tersimpan</a>
                                                     @endif
-
-                                                    <a class="hasil-evidence-link" href="{{ $evidenceUrl }}" target="_blank" rel="noreferrer">Lihat bukti</a>
-                                                @endif
-                                                <button class="save-btn" type="submit">Simpan</button>
+                                                </div>
+                                                <button class="save-btn" type="submit">Simpan perubahan</button>
                                             </div>
                                         </form>
-                                        <form method="POST" action="{{ route('audit-hasils.destroy', $hasil) }}" class="hasil-delete" onsubmit="return confirm('Hapus hasil audit ini?')">
+                                        <form method="POST" action="{{ route('audit-hasils.destroy', $hasil) }}" class="hasil-delete-form" onsubmit="return confirm('Hapus hasil audit ini?')">
                                             @csrf
                                             @method('DELETE')
                                             <input type="hidden" name="page" value="{{ $currentPage }}">
-                                            <button type="submit" class="hasil-delete">Hapus</button>
+                                            <button type="submit" class="hasil-delete">Hapus hasil audit</button>
                                         </form>
                                     </div>
                                 @empty
@@ -255,12 +262,14 @@
                                     <form method="POST" action="{{ route('audit-items.hasil.store', $item) }}" enctype="multipart/form-data" class="hasil-form">
                                         @csrf
                                         <input type="hidden" name="page" value="{{ $currentPage }}">
-                                        <textarea class="note-box" name="content" rows="2" placeholder="Tulis hasil audit atau temuan baru..."></textarea>
-                                        <div class="hasil-actions">
-                                            <label class="hasil-file">Bukti (opsional)
-                                                <input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png">
-                                            </label>
-                                            <button class="save-btn" type="submit">Tambah</button>
+                                        <label class="hasil-input-label" for="hasil-baru-{{ $item->id }}">Catatan hasil audit baru</label>
+                                        <textarea id="hasil-baru-{{ $item->id }}" class="note-box {{ $item->status === 'non_compliant' ? 'note-box--non-compliant' : '' }}" name="content" rows="3" placeholder="Tulis hasil audit atau temuan baru..."></textarea>
+                                        <div class="hasil-form-footer">
+                                            <div class="hasil-file-picker">
+                                                <label class="hasil-input-label" for="hasil-bukti-baru-{{ $item->id }}">Bukti pendukung (opsional)</label>
+                                                <input id="hasil-bukti-baru-{{ $item->id }}" class="hasil-file-input" type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png" aria-label="Bukti pendukung audit">
+                                            </div>
+                                            <button class="save-btn" type="submit">Tambah hasil audit</button>
                                         </div>
                                     </form>
                                 </div>
@@ -269,14 +278,14 @@
                     </div>
                 </div>
 
-                <form method="POST" action="{{ route('audit-items.update', $item) }}" class="item-status-form">
+                <form method="POST" action="{{ route('audit-items.update', $item) }}" class="item-status-form" data-audit-status-form>
                     @csrf
                     @method('PUT')
                     <input type="hidden" name="page" value="{{ $currentPage }}">
-                    <div class="status-form">
+                    <div class="status-form {{ $item->status === 'non_compliant' ? 'status-form--non-compliant' : '' }}" data-audit-status-controls>
                         <label for="status-{{ $item->id }}">Status indikator:</label>
-                        <span class="chip {{ $statusClass }}">{{ $statusLabel }}</span>
-                        <select id="status-{{ $item->id }}" name="status">
+                        <span class="chip {{ $statusClass }}" data-audit-status-chip>{{ $statusLabel }}</span>
+                        <select id="status-{{ $item->id }}" name="status" data-audit-status>
                             <option value="pending" @selected($item->status === 'pending')>Belum diperiksa</option>
                             <option value="compliant" @selected($item->status === 'compliant')>Memenuhi</option>
                             <option value="non_compliant" @selected($item->status === 'non_compliant')>Tidak memenuhi</option>

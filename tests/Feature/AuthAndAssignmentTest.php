@@ -42,7 +42,7 @@ class AuthAndAssignmentTest extends TestCase
             'name' => 'Auditor Baru',
             'email' => 'auditor.baru@example.com',
             'role' => 'auditor',
-            'requested_role' => 'admin',
+            'requested_role' => 'auditor',
         ]);
 
         $this->from(route('login'))->post(route('login.store'), [
@@ -56,16 +56,21 @@ class AuthAndAssignmentTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'admin']))
             ->get(route('users.index'))
             ->assertOk()
-            ->assertSee('Menunggu persetujuan:')
-            ->assertSee('<strong>Admin</strong>', false)
-            ->assertSee('Setujui role');
+            ->assertSee('Pengguna aktif')
+            ->assertSee('Menunggu persetujuan')
+            ->assertSee('Role ditetapkan oleh Master Admin')
+            ->assertSee('Pilih role akun')
+            ->assertSee('Setujui akun')
+            ->assertSee('Master Admin');
 
-        $this->post(route('users.approve-role', User::where('email', 'auditor.baru@example.com')->firstOrFail()))
+        $this->post(route('users.approve-role', User::where('email', 'auditor.baru@example.com')->firstOrFail()), [
+            'role' => 'lead_audit',
+        ])
             ->assertRedirect(route('users.index'));
 
         $this->assertDatabaseHas('users', [
             'email' => 'auditor.baru@example.com',
-            'role' => 'admin',
+            'role' => 'lead_audit',
             'requested_role' => null,
         ]);
 
@@ -80,9 +85,25 @@ class AuthAndAssignmentTest extends TestCase
         $this->get(route('register'))
             ->assertOk()
             ->assertSee('Ajukan akun')
-            ->assertSee('Lead Auditor')
-            ->assertSee('Admin')
-            ->assertSee('Persetujuan Admin diperlukan.');
+            ->assertSee('beberapa perusahaan')
+            ->assertSee('Persetujuan Master Admin diperlukan.')
+            ->assertSee('Master Admin akan mengaktifkan akun dan menetapkan role.')
+            ->assertDontSee('name="role"', false);
+    }
+
+    public function test_master_admin_must_assign_a_role_when_approving_an_account(): void
+    {
+        $user = User::factory()->create(['role' => 'auditor', 'requested_role' => 'auditor']);
+
+        $this->actingAs(User::factory()->create(['role' => 'admin']))
+            ->post(route('users.approve-role', $user))
+            ->assertSessionHasErrors('role');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'role' => 'auditor',
+            'requested_role' => 'auditor',
+        ]);
     }
 
     public function test_non_admin_cannot_approve_a_requested_role(): void
@@ -119,8 +140,42 @@ class AuthAndAssignmentTest extends TestCase
         $this->assertSame(3, $audit->assignees()->count());
     }
 
+    public function test_one_auditor_account_can_be_assigned_to_audits_for_multiple_companies(): void
+    {
+        $lead = User::factory()->create(['role' => 'lead_audit']);
+        $auditor = User::factory()->create(['role' => 'auditor']);
+        $firstAudit = Company::factory()->create()->audits()->create(['title' => 'Audit perusahaan pertama']);
+        $secondAudit = Company::factory()->create()->audits()->create(['title' => 'Audit perusahaan kedua']);
+
+        $this->actingAs($lead)->put(route('audits.assignments.update', $firstAudit), [
+            'assignments' => [
+                ['principle' => 1, 'users' => [$auditor->id]],
+            ],
+        ])->assertRedirect();
+
+        $this->put(route('audits.assignments.update', $secondAudit), [
+            'assignments' => [
+                ['principle' => 2, 'users' => [$auditor->id]],
+            ],
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('audit_principle_user', [
+            'audit_id' => $firstAudit->id,
+            'user_id' => $auditor->id,
+            'principle_number' => 1,
+        ]);
+        $this->assertDatabaseHas('audit_principle_user', [
+            'audit_id' => $secondAudit->id,
+            'user_id' => $auditor->id,
+            'principle_number' => 2,
+        ]);
+        $this->assertSame(1, User::where('email', $auditor->email)->count());
+    }
+
     public function test_admin_can_open_the_auditor_assignment_menu(): void
     {
+        User::factory()->create(['role' => 'lead_audit']);
+        User::factory()->create(['role' => 'auditor']);
         $audit = Company::factory()->create()->audits()->create(['title' => 'Audit ISPO demo']);
         $audit->items()->create(['title' => '1.1.1 Legalitas usaha', 'sort_order' => 1]);
         $otherAudit = Company::factory()->create()->audits()->create(['title' => 'Audit checklist lama']);
@@ -131,12 +186,19 @@ class AuthAndAssignmentTest extends TestCase
             ->assertOk()
             ->assertSee('Penugasan auditor')
             ->assertSee('Audit ISPO demo')
+            ->assertSee('Belum dimulai')
+            ->assertSee('Penugasan prinsip')
             ->assertDontSee('Audit checklist lama')
             ->assertSee(route('audits.assignments.edit', $audit), false);
 
         $this->get(route('audits.assignments.edit', $audit))
             ->assertOk()
             ->assertSee('Kepatuhan terhadap peraturan')
+            ->assertSee('assignment-row__header', false)
+            ->assertSee('Cari nama auditor...')
+            ->assertSee('Lead Auditor')
+            ->assertSee('Prinsip 7: Peningkatan usaha berkelanjutan')
+            ->assertSee('penugasan dipilih')
             ->assertSee('Simpan penugasan');
 
         $this->get(route('audits.show', $audit))

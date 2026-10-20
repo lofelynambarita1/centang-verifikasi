@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Notifications\AuditSystemNotification;
 use App\Support\NotificationDispatcher;
-use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,7 +28,6 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', 'in:admin,lead_audit,auditor'],
         ]);
 
         $newUser = User::create([
@@ -36,14 +35,8 @@ class AuthController extends Controller
             'email' => $validated['email'],
             'password' => $validated['password'],
             'role' => 'auditor',
-            'requested_role' => $validated['role'],
+            'requested_role' => 'auditor',
         ]);
-
-        $requestedRoleName = match ($validated['role']) {
-            'admin' => 'Admin',
-            'lead_audit' => 'Lead Auditor',
-            default => 'Auditor',
-        };
 
         $admins = User::query()
             ->where('role', 'admin')
@@ -52,12 +45,12 @@ class AuthController extends Controller
 
         $notifications->send($admins, new AuditSystemNotification(
             'role_request',
-            'Permintaan role baru',
-            "{$newUser->name} mengajukan role {$requestedRoleName}.",
+            'Permintaan akun baru',
+            "{$newUser->name} meminta pendaftaran akun dan menunggu persetujuan Master Admin.",
             route('users.index', [], false),
         ));
 
-        return redirect()->route('login')->with('success', "Permintaan akun {$requestedRoleName} dikirim. Akun dapat digunakan setelah disetujui Admin.");
+        return redirect()->route('login')->with('success', 'Pendaftaran akun dikirim. Akun dapat digunakan setelah disetujui dan diberi role oleh Master Admin.');
     }
 
     public function store(Request $request): RedirectResponse
@@ -75,7 +68,7 @@ class AuthController extends Controller
             Auth::logout();
             $request->session()->regenerate();
 
-            return back()->withErrors(['email' => 'Pendaftaran akun Anda masih menunggu persetujuan Admin.'])->onlyInput('email');
+            return back()->withErrors(['email' => 'Pendaftaran akun Anda masih menunggu persetujuan Master Admin.'])->onlyInput('email');
         }
 
         $request->session()->regenerate();
