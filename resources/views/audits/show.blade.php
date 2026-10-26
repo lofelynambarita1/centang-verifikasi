@@ -24,16 +24,18 @@
         <a class="btn btn--outline" href="{{ route('companies.index') }}">Perusahaan</a>
         <a class="btn btn--outline" href="{{ route('companies.edit', $audit->company) }}">Edit data</a>
 
-        <div class="menu-split" data-menu>
-            <button class="btn btn--outline menu-split__trigger menu-split__trigger--plain" type="button" aria-expanded="false" aria-controls="audit-export-menu">
-                Cetak laporan
-            </button>
-            <div class="menu-split__panel" id="audit-export-menu" role="menu" aria-label="Export laporan">
-                <a class="menu-split__item" href="{{ route('audits.report', $audit) }}" role="menuitem">Cetak laporan</a>
-                <a class="menu-split__item" href="{{ route('audits.download', $audit) }}" role="menuitem">Download Word</a>
-                <a class="menu-split__item menu-split__item--primary" href="{{ route('audits.pdf', $audit) }}" role="menuitem">Download PDF</a>
+        @if ($isAuditManager)
+            <div class="menu-split" data-menu>
+                <button class="btn btn--outline menu-split__trigger menu-split__trigger--plain" type="button" aria-expanded="false" aria-controls="audit-export-menu">
+                    Cetak laporan
+                </button>
+                <div class="menu-split__panel" id="audit-export-menu" role="menu" aria-label="Export laporan">
+                    <a class="menu-split__item" href="{{ route('audits.report', $audit) }}" role="menuitem">Cetak laporan</a>
+                    <a class="menu-split__item" href="{{ route('audits.download', $audit) }}" role="menuitem">Download Word</a>
+                    <a class="menu-split__item menu-split__item--primary" href="{{ route('audits.pdf', $audit) }}" role="menuitem">Download PDF</a>
+                </div>
             </div>
-        </div>
+        @endif
     </div>
 @endsection
 
@@ -112,9 +114,9 @@
         </div>
     </section>
 
-    <section class="audit-summary" aria-label="Progres verifikasi keseluruhan">
+    <section class="audit-summary" aria-label="{{ $isAuditManager ? 'Progres verifikasi keseluruhan' : 'Progres prinsip yang ditugaskan' }}">
         <div class="summary-head">
-            <strong>Progres verifikasi keseluruhan</strong>
+            <strong>{{ $isAuditManager ? 'Progres verifikasi keseluruhan' : 'Progres prinsip yang ditugaskan' }}</strong>
             <div class="summary-metric">
                 <span>{{ $verifiedItems }} / {{ $totalItems }} indikator terisi</span>
                 <strong>{{ $progress }}%</strong>
@@ -158,6 +160,12 @@
                 7 => 'PENINGKATAN USAHA SECARA BERKELANJUTAN',
             ];
             $activePrinciple = $isIspoChecklist ? $currentPage : 1;
+            $principleNumbers = $reviewablePrinciples->values();
+            $principlePosition = $principleNumbers->search($currentPage);
+            $previousPrinciple = $principlePosition > 0 ? $principleNumbers->get($principlePosition - 1) : null;
+            $nextPrinciple = $principleNumbers->get($principlePosition + 1);
+            $hasPrinciplePagination = $isIspoChecklist && $principleNumbers->count() > 1;
+            $hasLegacyPagination = ! $isIspoChecklist && $items->hasPages();
         @endphp
         <div class="principle-head">
             <span class="num">Prinsip {{ $activePrinciple }}</span>
@@ -285,8 +293,10 @@
                     <div class="status-form {{ $item->status === 'non_compliant' ? 'status-form--non-compliant' : '' }}" data-audit-status-controls>
                         <label for="status-{{ $item->id }}">Status indikator:</label>
                         <span class="chip {{ $statusClass }}" data-audit-status-chip>{{ $statusLabel }}</span>
-                        <select id="status-{{ $item->id }}" name="status" data-audit-status>
-                            <option value="pending" @selected($item->status === 'pending')>Belum diperiksa</option>
+                        <select id="status-{{ $item->id }}" name="status" data-audit-status required>
+                            @if ($item->status === 'pending')
+                                <option value="" selected disabled hidden></option>
+                            @endif
                             <option value="compliant" @selected($item->status === 'compliant')>Memenuhi</option>
                             <option value="non_compliant" @selected($item->status === 'non_compliant')>Tidak memenuhi</option>
                             <option value="not_applicable" @selected($item->status === 'not_applicable')>NA</option>
@@ -299,21 +309,25 @@
             <div class="empty">Belum ada prinsip verifikasi untuk audit ini.</div>
         @endforelse
 
-        @if ($isIspoChecklist || $items->hasPages())
+        @if ($hasPrinciplePagination || $hasLegacyPagination)
             <div class="pagination-row">
-                @if ($currentPage <= 1)
+                @if (($isIspoChecklist && ! $previousPrinciple) || (! $isIspoChecklist && $currentPage <= 1))
                     <button type="button" class="btn btn--ghost btn--sm" disabled>Prinsip sebelumnya</button>
+                @elseif ($isIspoChecklist)
+                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', ['audit' => $audit, 'page' => $previousPrinciple]) }}">Prinsip sebelumnya</a>
                 @else
                     <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', ['audit' => $audit, 'page' => $currentPage - 1]) }}">Prinsip sebelumnya</a>
                 @endif
 
                 @if ($isIspoChecklist)
-                    <span>Prinsip {{ $currentPage }} dari 7</span>
+                    <span>Prinsip {{ $currentPage }} · {{ $principlePosition + 1 }} dari {{ $principleNumbers->count() }}</span>
                 @else
                     <span>Halaman {{ $currentPage }} dari {{ $items->lastPage() }} prinsip</span>
                 @endif
 
-                @if ($currentPage < ($isIspoChecklist ? 7 : $items->lastPage()))
+                @if ($isIspoChecklist && $nextPrinciple)
+                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', ['audit' => $audit, 'page' => $nextPrinciple]) }}">Prinsip berikutnya</a>
+                @elseif (! $isIspoChecklist && $currentPage < $items->lastPage())
                     <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', ['audit' => $audit, 'page' => $currentPage + 1]) }}">Prinsip berikutnya</a>
                 @else
                     <button type="button" class="btn btn--ghost btn--sm" disabled>Prinsip berikutnya</button>
@@ -321,25 +335,27 @@
             </div>
         @endif
 
-        <div class="audit-completion">
-            <div>
-                <strong>{{ $verifiedItems === $totalItems && $totalItems > 0 ? 'Semua indikator sudah diisi' : 'Audit belum selesai' }}</strong>
-                <span>{{ $verifiedItems }} dari {{ $totalItems }} indikator sudah memiliki status.</span>
-                <span class="draft-note">Status audit: <b>{{ $audit->status === 'completed' ? 'Selesai' : 'Draft' }}</b> · data tersimpan otomatis setiap kali Anda menekan Simpan.</span>
+        @if ($isAuditManager)
+            <div class="audit-completion">
+                <div>
+                    <strong>{{ $verifiedItems === $totalItems && $totalItems > 0 ? 'Semua indikator sudah diisi' : 'Audit belum selesai' }}</strong>
+                    <span>{{ $verifiedItems }} dari {{ $totalItems }} indikator sudah memiliki status.</span>
+                    <span class="draft-note">Status audit: <b>{{ $audit->status === 'completed' ? 'Selesai' : 'Draft' }}</b> · data tersimpan otomatis setiap kali Anda menekan Simpan.</span>
+                </div>
+                <div class="completion-actions">
+                    @if ($verifiedItems === $totalItems && $totalItems > 0)
+                        <a class="btn btn--primary" href="{{ route('audits.pdf', $audit) }}">Download 1 file lengkap (PDF)</a>
+                    @else
+                        <span class="draft-note">Lengkapi semua indikator untuk mengunduh seluruh prinsip dalam 1 file.</span>
+                    @endif
+                    <form method="POST" action="{{ route('audits.complete', $audit) }}">
+                        @csrf
+                        <button class="btn btn--ghost" type="submit" @disabled($verifiedItems !== $totalItems || $totalItems === 0)>
+                            {{ $audit->status === 'completed' ? 'Audit telah selesai' : 'Tandai audit selesai' }}
+                        </button>
+                    </form>
+                </div>
             </div>
-            <div class="completion-actions">
-                @if ($verifiedItems === $totalItems && $totalItems > 0)
-                    <a class="btn btn--primary" href="{{ route('audits.pdf', $audit) }}">Download 1 file lengkap (PDF)</a>
-                @else
-                    <span class="draft-note">Lengkapi semua indikator untuk mengunduh seluruh prinsip dalam 1 file.</span>
-                @endif
-                <form method="POST" action="{{ route('audits.complete', $audit) }}">
-                    @csrf
-                    <button class="btn btn--ghost" type="submit" @disabled($verifiedItems !== $totalItems || $totalItems === 0)>
-                        {{ $audit->status === 'completed' ? 'Audit telah selesai' : 'Tandai audit selesai' }}
-                    </button>
-                </form>
-            </div>
-        </div>
+        @endif
     </section>
 @endsection

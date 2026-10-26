@@ -27,13 +27,14 @@
                 <div class="hero__sub">{{ $company->industry ?: 'Bidang usaha belum diisi' }}</div>
             </div>
             <div class="hero__actions">
-                @if ($company->audits->isNotEmpty())
-                    <a class="btn btn--light" href="{{ route('audits.show', $company->audits->sortByDesc('created_at')->first()) }}">Buka audit terbaru</a>
+                @if ($company->audits->isNotEmpty() && auth()->user()->canReviewAudit($company->audits->sortByDesc('created_at')->first()))
+                    <a class="btn btn--light" href="{{ route('audits.show', $company->audits->sortByDesc('created_at')->first()) }}">Review audit terbaru</a>
                 @endif
             </div>
         </div>
         <div class="hero__body">
             <div class="meta-row"><span>Alamat</span><b>{{ $company->address ?: 'Belum diisi' }}</b></div>
+            <div class="meta-row"><span>Luasan lahan</span><b>{{ $company->land_area ?: 'Belum diisi' }}</b></div>
             <div class="meta-row"><span>Bidang usaha</span><b>{{ $company->industry ?: 'Belum diisi' }}</b></div>
             <div class="meta-row"><span>Nama PIC</span><b>{{ $company->contact_name ?: 'Belum diisi' }}</b></div>
             <div class="meta-row"><span>Email PIC</span><b>{{ $company->contact_email ?: 'Belum diisi' }}</b></div>
@@ -66,6 +67,7 @@
                         $totalItems = $audit->items->count();
                         $verifiedItems = $audit->items->whereIn('status', ['compliant', 'non_compliant', 'not_applicable'])->count();
                         $progress = $totalItems ? round($verifiedItems / $totalItems * 100) : 0;
+                        $canReviewAudit = auth()->user()->canReviewAudit($audit);
                         $statusClass = $audit->status === 'completed' ? 'chip--done' : ($audit->status === 'in_progress' ? 'chip--wip' : 'chip--todo');
                         $statusLabel = $audit->status === 'completed' ? 'Selesai' : ($audit->status === 'in_progress' ? 'Proses verifikasi' : 'Belum mulai');
                     @endphp
@@ -90,7 +92,11 @@
                                 <span class="progress__pct">{{ $progress }}%</span>
                             </div>
                         </td>
-                        <td><a class="link" href="{{ route('audits.show', $audit) }}">Buka audit →</a></td>
+                        <td>
+                            @if ($canReviewAudit)
+                                <a class="link" href="{{ route('audits.show', $audit) }}">Review →</a>
+                            @endif
+                        </td>
                     </tr>
                 @empty
                     <tr>

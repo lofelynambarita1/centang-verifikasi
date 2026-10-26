@@ -705,6 +705,8 @@ img, svg { vertical-align: middle; }
 
 .cell-company { display: flex; align-items: center; gap: 13px; }
 .cell-company strong { display: block; font-size: 14.5px; color: var(--text); letter-spacing: -.015em; }
+.company-review-link { color: inherit; text-decoration: none; }
+.company-review-link:hover { color: var(--primary); text-decoration: underline; }
 .cell-company span { display: block; margin-top: 2px; font-size: 13px; color: var(--quiet); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cell-meta { margin-top: 5px; font-size: 13px; color: var(--quiet); }
 .cell-meta strong { color: var(--text); font-weight: 700; }

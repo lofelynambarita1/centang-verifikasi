@@ -6,7 +6,7 @@
     <style>
         @page {
             size: A4 portrait;
-            margin: 14mm 12mm 16mm;
+            margin: 25.4mm;
         }
 
         * { box-sizing: border-box; }
@@ -15,8 +15,8 @@
             margin: 0;
             color: #111;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 12px;
-            line-height: 1.45;
+            font-size: 12pt;
+            line-height: 1.2;
             background: #fff;
         }
 
@@ -26,163 +26,147 @@
         }
 
         .pdf-header {
-            display: table;
+            position: fixed;
+            top: -23.5mm;
+            left: 0;
             width: 100%;
-            table-layout: fixed;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #111;
+            height: 73.5pt;
         }
 
-        .gis-logo {
-            display: table-cell;
-            width: 78px;
-            vertical-align: middle;
-        }
-
-        .gis-logo img {
+        .gis-letterhead {
             display: block;
-            width: 70px;
-            height: 70px;
-        }
-
-        .gis-brand {
-            display: table-cell;
-            vertical-align: middle;
-        }
-
-        .gis-brand h1 {
-            margin: 0;
-            color: #29346c;
-            font-size: 18px;
-            font-weight: 800;
-            letter-spacing: .02em;
-            text-transform: uppercase;
-        }
-
-        .gis-brand p {
-            margin: 4px 0 0;
-            color: #d63d2f;
-            font-size: 12px;
-            font-style: italic;
-            font-weight: 700;
+            width: 100%;
+            height: auto;
         }
 
         .pdf-form-code {
-            display: table-cell;
-            width: 108px;
-            vertical-align: top;
+            position: absolute;
+            top: 0;
+            right: 0;
             text-align: right;
-            font-size: 11px;
-            font-weight: 700;
+            font-size: 11pt;
+            font-weight: 400;
             color: #222;
             white-space: nowrap;
         }
 
         .pdf-title {
-            margin: 18px 0 4px;
+            margin: 13pt 0 0;
             text-align: center;
-            font-size: 19px;
-            font-weight: 800;
+            font-size: 16pt;
+            font-weight: 700;
             letter-spacing: .02em;
             color: #111;
         }
 
         .pdf-auditee {
-            margin: 0 0 14px;
+            margin: 0 0 20pt;
             text-align: center;
-            font-size: 12px;
+            font-size: 12pt;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: .04em;
         }
 
         .pdf-facts {
-            width: 100%;
-            margin-bottom: 12px;
+            width: 85%;
+            margin: 0 auto 20pt;
             border-collapse: collapse;
         }
 
         .pdf-facts td {
-            padding: 2px 0;
+            padding: 0;
             vertical-align: top;
-            font-size: 11px;
+            font-size: 12pt;
+            line-height: 1.3;
         }
 
         .pdf-facts td.k {
-            width: 155px;
-            font-weight: 700;
+            width: 108pt;
+            font-weight: 400;
             color: #111;
         }
 
         .pdf-facts td.s {
-            width: 14px;
+            width: 8pt;
             text-align: center;
         }
 
         .section-title {
-            margin: 12px 0 8px;
-            font-size: 13px;
-            font-weight: 800;
-            color: #29346c;
+            margin: 12pt 0 8pt;
+            font-size: 14pt;
+            font-weight: 700;
+            color: #111;
             text-transform: uppercase;
         }
 
+        .verification-title {
+            margin: 0 0 8pt 36pt;
+            font-size: 12pt;
+        }
+
         .summary-intro {
-            margin: 0 0 8px;
-            text-align: justify;
-            font-size: 11px;
+            margin: 0 0 8pt;
+            text-align: left;
+            font-size: 12pt;
         }
 
         .summary-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 10px 0 12px;
+            margin: 10pt 0 12pt;
         }
 
         .summary-table th,
         .summary-table td {
-            border: 1px solid #d7dce9;
-            padding: 6px 8px;
+            border: 1px solid #111;
+            padding: 4pt 6pt;
             text-align: center;
-            font-size: 11px;
+            font-size: 10pt;
         }
 
         .summary-table th {
-            background: #e9edf9;
-            font-weight: 800;
+            background: #fff;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: .03em;
         }
 
         .principle-title {
-            margin: 16px 0 10px;
-            padding-bottom: 4px;
-            border-bottom: 1px solid #111;
-            font-size: 12px;
-            font-weight: 800;
-            color: #1d2343;
+            margin: 12pt 0 0 36pt;
+            font-size: 11pt;
+            font-weight: 700;
+            color: #111;
             text-transform: uppercase;
         }
 
         .criteria-title {
-            margin: 12px 0 4px;
-            padding-bottom: 3px;
-            border-bottom: 1px solid #b9bfd7;
-            font-size: 11px;
-            font-weight: 800;
+            margin: 0 0 4pt 36pt;
+            font-size: 11pt;
+            font-weight: 700;
             color: #111;
         }
 
+        .principle-code,
+        .criteria-code {
+            display: inline-block;
+            width: 68pt;
+            padding-left: 5pt;
+            vertical-align: top;
+        }
+
         .criteria-desc {
-            margin: 0 0 8px;
-            font-size: 10.5px;
+            margin: 0 0 8pt;
+            margin-left: 104pt;
+            font-size: 10pt;
             color: #333;
-            text-align: justify;
+            text-align: left;
         }
 
         .verification-record {
-            width: 100%;
-            margin: 0 0 10px;
+            width: 92%;
+            margin: 0 0 10pt;
+            margin-left: 8%;
             border-collapse: collapse;
             table-layout: fixed;
         }
@@ -193,31 +177,32 @@
         }
 
         .record-index {
-            width: 52px;
-            padding: 8px 6px;
-            font-size: 10.5px;
+            width: 68pt;
+            padding: 0 0 0 5pt;
+            font-size: 11pt;
         }
 
         .record-head {
             margin: 0;
-            padding: 7px 8px;
-            font-size: 11px;
-            font-weight: 800;
-            background: #f6f6f7;
+            padding: 0;
+            font-size: 11pt;
+            font-weight: 400;
+            background: #fff;
         }
 
         .record-label,
         .record-value {
-            padding: 6px 8px;
+            padding: 2pt 0;
             vertical-align: top;
-            font-size: 10.5px;
+            font-size: 11pt;
         }
 
         .record-label {
-            width: 94px;
-            font-weight: 800;
+            width: 68pt;
+            padding-left: 0;
+            font-weight: 400;
             border-right: 1px solid #111;
-            background: #f6f6f7;
+            background: #fff;
         }
 
         .record-value {
@@ -225,42 +210,50 @@
             word-wrap: break-word;
         }
 
+        .evidence-filename {
+            margin-top: 4pt;
+            color: #555;
+            font-size: 9pt;
+            word-wrap: break-word;
+        }
+
         .record-value img {
-            max-width: 150px;
-            max-height: 110px;
+            display: block;
+            max-width: 100pt;
+            max-height: 75pt;
             object-fit: contain;
         }
 
-        .status-compliant { color: #2f4bab; }
-        .status-non_compliant { color: #c94a3e; }
-        .status-not_applicable { color: #596176; }
-        .status-pending { color: #8a8a8a; }
+        .status-compliant,
+        .status-non_compliant,
+        .status-not_applicable,
+        .status-pending { color: #111; }
 
         .findings {
-            margin: 4px 0 0;
+            margin: 4pt 0 0;
             padding-left: 18px;
-            font-size: 11px;
+            font-size: 10pt;
         }
 
-        .findings li { margin-bottom: 6px; }
+        .findings li { margin-bottom: 6pt; }
 
         .signatures {
             width: 100%;
-            margin-top: 26px;
+            margin-top: 26pt;
             border-collapse: collapse;
         }
 
         .signatures td {
             width: 50%;
             text-align: center;
-            padding: 0 12px;
-            font-size: 11px;
+            padding: 0 12pt;
+            font-size: 10pt;
         }
 
         .sign-line {
-            width: 180px;
+            width: 180pt;
             height: 1px;
-            margin: 0 auto 6px;
+            margin: 0 auto 6pt;
             background: #333;
         }
 
@@ -270,14 +263,14 @@
 
         .sign-role {
             color: #555;
-            margin-top: 2px;
+            margin-top: 2pt;
         }
 
         .pdf-footer {
-            margin-top: 18px;
-            padding-top: 8px;
+            margin-top: 18pt;
+            padding-top: 8pt;
             border-top: 1px solid #d9d9d9;
-            font-size: 9.5px;
+            font-size: 8pt;
             color: #555;
             text-align: center;
         }
@@ -299,8 +292,8 @@
         ];
         $principleTitles = config('ispo.principles', []);
         $criteriaMap = config('ispo.criteria', []);
-        $logoPath = public_path('images/logogis.jpeg');
-        $logoDataUri = is_file($logoPath) ? 'data:image/jpeg;base64,'.base64_encode(file_get_contents($logoPath)) : null;
+        $letterheadPath = public_path('images/gis-letterhead.jpg');
+        $letterheadDataUri = 'data:image/jpeg;base64,'.base64_encode(file_get_contents($letterheadPath));
         $groups = $isIspoChecklist
             ? $principles->map(fn ($group) => $group->sortBy('sort_order')->values())
             : collect([0 => $items]);
@@ -308,35 +301,25 @@
 
     <div class="pdf-document">
         <header class="pdf-header">
-            <div class="gis-logo">
-                @if ($logoDataUri)
-                    <img src="{{ $logoDataUri }}" alt="GIS">
-                @else
-                    GIS
-                @endif
-            </div>
-            <div class="gis-brand">
-                <h1>PT. Global Inspeksi Sertifikasi</h1>
-                <p>Inspection &amp; Certification Body</p>
-            </div>
+            <img class="gis-letterhead" src="{{ $letterheadDataUri }}" alt="PT. Global Inspeksi Sertifikasi">
             <div class="pdf-form-code">FrO. 8603/GIS-1.1</div>
         </header>
 
         <h1 class="pdf-title">LAPORAN VERIFIKASI HASIL ISPO</h1>
-        <div class="pdf-auditee">(AUDITEE / {{ strtoupper($audit->company->name ?: 'NAMA KLIEN') }})</div>
+        <div class="pdf-auditee">({{ strtoupper($audit->company->name ?: 'NAMA KLIEN') }})</div>
 
         <table class="pdf-facts">
             <tr><td class="k">Nama Perusahaan</td><td class="s">:</td><td>{{ $audit->company->name ?: '-' }}</td></tr>
             <tr><td class="k">Alamat Perusahaan</td><td class="s">:</td><td>{{ $audit->company->address ?: '-' }}</td></tr>
-            <tr><td class="k">Luasan Lahan</td><td class="s">:</td><td>-</td></tr>
+            <tr><td class="k">Luasan Lahan</td><td class="s">:</td><td>{{ $audit->company->land_area ?: '-' }}</td></tr>
             <tr><td class="k">Auditor</td><td class="s">:</td><td>{{ $audit->auditorNamesText() ?: '-' }}</td></tr>
             <tr><td class="k">Tanggal Audit</td><td class="s">:</td><td>{{ $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-' }}</td></tr>
         </table>
 
         <div class="section-title">I. HASIL PENILAIAN</div>
         <p class="summary-intro"><strong>RINGKASAN PENILAIAN</strong></p>
-        <p class="summary-intro">Dalam kegiatan penilaian/audit ISPO Tahap 2 ini ditemukan beberapa ketidaksesuaian yang terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan kemudian saat ini pihak {{ $audit->company->name ?: 'perusahaan' }} telah melakukan tindakan perbaikan untuk pemenuhan ketidaksesuaian tersebut seluruhnya.</p>
-        <p class="summary-intro">Berikut ini merupakan ringkasan dari hasil penilaian yang dibuat berdasarkan Prinsip, Kriteria dan indikator ISPO seperti yang ditetapkan dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit.</p>
+        <p class="summary-intro" style="white-space:pre-line">{{ $audit->reportSummaryParagraphOne() }}</p>
+        <p class="summary-intro" style="white-space:pre-line">{{ $audit->reportSummaryParagraphTwo() }}</p>
 
         <table class="summary-table">
             <thead>
@@ -359,14 +342,16 @@
             </tbody>
         </table>
 
-        <div class="section-title">HASIL VERIFIKASI PENILAIAN</div>
+        <div class="section-title verification-title">HASIL VERIFIKASI PENILAIAN</div>
 
         @forelse ($groups as $number => $group)
             @if ($group->isEmpty())
                 @continue
             @endif
 
-            <div class="principle-title">{{ $number }}. {{ $principleTitles[$number] ?? '' }}</div>
+            <div class="principle-title">
+                <span class="principle-code">{{ $number }}.</span><span>{{ $principleTitles[$number] ?? '' }}</span>
+            </div>
 
             @php $previousCriteria = null; @endphp
 
@@ -380,7 +365,9 @@
                 @endphp
 
                 @if ($criteriaInfo && $criteriaCode !== $previousCriteria)
-                    <div class="criteria-title">{{ $criteriaCode }} {{ $criteriaInfo['title'] }}</div>
+                    <div class="criteria-title">
+                        <span class="criteria-code">{{ $criteriaCode }}</span><span>{{ $criteriaInfo['title'] }}</span>
+                    </div>
                     @if (! empty($criteriaInfo['description']))
                         <p class="criteria-desc">{{ $criteriaInfo['description'] }}</p>
                     @endif
@@ -388,6 +375,10 @@
                 @endif
 
                 <table class="verification-record">
+                    <colgroup>
+                        <col style="width: 68pt">
+                        <col>
+                    </colgroup>
                     <tr>
                         <td class="record-index">{{ $code }}</td>
                         <td class="record-head">{{ $indicatorTitle }}</td>
@@ -414,7 +405,7 @@
                                     @if ($evidenceDataUri)
                                         <img src="{{ $evidenceDataUri }}" style="display: block; margin-top: 8px; border: 1px solid #dfe5ee;" alt="Bukti audit">
                                     @endif
-                                    <div>Bukti: {{ basename($hasil->evidence_path) }}</div>
+                                    <div class="evidence-filename">Bukti: {{ basename($hasil->evidence_path) }}</div>
                                 @endif
                             </td>
                         </tr>

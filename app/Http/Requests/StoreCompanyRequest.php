@@ -26,10 +26,13 @@ class StoreCompanyRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'industry' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:500'],
+            'land_area' => ['nullable', 'string', 'max:255'],
             'contact_name' => ['nullable', 'string', 'max:255'],
             'contact_email' => ['nullable', 'email', 'max:255'],
             'auditor_name' => ['nullable', 'string', 'max:500'],
             'due_date' => ['nullable', 'date'],
+            'report_summary_paragraph_one' => ['nullable', 'string', 'max:10000'],
+            'report_summary_paragraph_two' => ['nullable', 'string', 'max:10000'],
         ];
     }
 }

@@ -242,6 +242,73 @@ class AuthAndAssignmentTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_lead_auditor_can_review_all_principles_from_the_company_name(): void
+    {
+        $company = Company::factory()->create(['name' => 'PT Audit Semua Prinsip']);
+        $audit = $company->audits()->create(['title' => 'Audit ISPO']);
+        $audit->items()->createMany([
+            ['title' => '1.1.1 Indikator prinsip satu', 'sort_order' => 1],
+            ['title' => '7.1.1 Indikator prinsip tujuh', 'sort_order' => 7],
+        ]);
+        $lead = User::factory()->create(['role' => 'lead_audit']);
+
+        $this->actingAs($lead)
+            ->get(route('companies.index'))
+            ->assertSee('href="'.route('audits.show', $audit).'"', false)
+            ->assertSee('>PT Audit Semua Prinsip</a>', false)
+            ->assertSee('>Review</a>', false);
+
+        $this->get(route('audits.show', ['audit' => $audit, 'page' => 7]))
+            ->assertSee('Indikator prinsip tujuh')
+            ->assertSee('Prinsip 7');
+    }
+
+    public function test_auditor_can_review_only_assigned_principles_from_company_name(): void
+    {
+        $company = Company::factory()->create(['name' => 'PT Audit Terbatas']);
+        $audit = $company->audits()->create(['title' => 'Audit ISPO']);
+        $audit->items()->createMany([
+            ['title' => '1.1.1 Indikator rahasia prinsip satu', 'sort_order' => 1],
+            ['title' => '2.1.1 Indikator tugas prinsip dua', 'sort_order' => 2],
+        ]);
+        $auditor = User::factory()->create(['role' => 'auditor']);
+        $audit->assignees()->attach($auditor, ['principle_number' => 2]);
+
+        $this->actingAs($auditor)
+            ->get(route('companies.index'))
+            ->assertSee('href="'.route('audits.show', $audit).'"', false)
+            ->assertSee('>PT Audit Terbatas</a>', false)
+            ->assertSee('>Review</a>', false);
+
+        $this->get(route('audits.show', $audit))
+            ->assertSee('Indikator tugas prinsip dua')
+            ->assertDontSee('Indikator rahasia prinsip satu')
+            ->assertDontSee(route('audits.show', ['audit' => $audit, 'page' => 1]), false)
+            ->assertDontSee('Cetak laporan');
+
+        $this->get(route('audits.show', ['audit' => $audit, 'page' => 1]))
+            ->assertForbidden();
+
+        $this->get(route('audits.report', $audit))
+            ->assertForbidden();
+    }
+
+    public function test_unassigned_auditor_cannot_open_review_or_see_review_links(): void
+    {
+        $company = Company::factory()->create(['name' => 'PT Belum Ditugaskan']);
+        $audit = $company->audits()->create(['title' => 'Audit ISPO']);
+        $audit->items()->create(['title' => '1.1.1 Indikator audit', 'sort_order' => 1]);
+        $auditor = User::factory()->create(['role' => 'auditor']);
+
+        $this->actingAs($auditor)
+            ->get(route('companies.index'))
+            ->assertDontSee('href="'.route('audits.show', $audit).'"', false)
+            ->assertDontSee('>Review</a>', false);
+
+        $this->get(route('audits.show', $audit))
+            ->assertForbidden();
+    }
+
     public function test_auditor_can_only_update_an_assigned_principle(): void
     {
         $auditor = User::factory()->create(['role' => 'auditor']);

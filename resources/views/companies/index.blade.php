@@ -36,6 +36,7 @@
                 @forelse ($companies as $company)
                     @php
                         $audit = $company->audits->sortByDesc('created_at')->first();
+                        $canReviewAudit = $audit && auth()->user()->canReviewAudit($audit);
                         $totalItems = $audit?->items->count() ?? 0;
                         $verifiedItems = $audit?->items->whereIn('status', ['compliant', 'non_compliant', 'not_applicable'])->count() ?? 0;
                         $progress = $totalItems ? round($verifiedItems / $totalItems * 100) : 0;
@@ -45,7 +46,11 @@
                             <div class="cell-company">
                                 <div class="avatar {{ $avatarColors[$loop->index % 5] }}">{{ $initials($company->name) }}</div>
                                 <div>
-                                    <strong>{{ $company->name }}</strong>
+                                    @if ($canReviewAudit)
+                                        <strong><a class="company-review-link" href="{{ route('audits.show', $audit) }}">{{ $company->name }}</a></strong>
+                                    @else
+                                        <strong>{{ $company->name }}</strong>
+                                    @endif
                                     <span>{{ $company->address ?: 'Alamat belum diisi' }}</span>
                                 </div>
                             </div>
@@ -65,7 +70,9 @@
                         </td>
                         <td>
                             <div class="cell-actions">
-                                <a class="btn btn--ghost btn--sm" href="{{ $audit ? route('audits.show', $audit) : route('companies.show', $company) }}">Buka</a>
+                                @if ($canReviewAudit)
+                                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', $audit) }}">Review</a>
+                                @endif
                                 <a class="btn btn--ghost btn--sm" href="{{ route('companies.edit', $company) }}">Edit</a>
                                 <form method="POST" action="{{ route('companies.destroy', $company) }}" onsubmit="return confirm('Hapus perusahaan ini beserta auditnya?')">
                                     @csrf

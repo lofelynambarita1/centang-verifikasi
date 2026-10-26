@@ -5,6 +5,11 @@
 // Diekstrak dari dokumen FrO. 8603/GIS-1.1 Laporan Verifikasi Hasil ISPO.
 
 return [
+    'report_summary' => [
+        'paragraph_one' => 'Dalam kegiatan penilaian/audit ISPO Tahap 2 ini ditemukan beberapa ketidaksesuaian yang terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan pihak :company telah melakukan tindakan perbaikan untuk pemenuhan ketidaksesuaian tersebut.',
+        'paragraph_two' => 'Berikut ini merupakan ringkasan hasil penilaian berdasarkan Prinsip, Kriteria, dan indikator ISPO yang ditetapkan dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit.',
+    ],
+
     'principles' => [
         1 => 'KEPATUHAN TERHADAP PERATURAN PERUNDANGUNDANGAN',
         2 => 'PENERAPAN PRAKTEK PERKEBUNAN YANG BAIK',

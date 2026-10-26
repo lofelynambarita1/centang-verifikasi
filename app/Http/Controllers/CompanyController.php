@@ -16,7 +16,7 @@ class CompanyController extends Controller
      */
     public function index(): View
     {
-        return view('companies.index', ['companies' => Company::with('audits.items')->latest()->get()]);
+        return view('companies.index', ['companies' => Company::with('audits.items', 'audits.assignees')->latest()->get()]);
     }
 
     /**
@@ -33,12 +33,19 @@ class CompanyController extends Controller
     public function store(StoreCompanyRequest $request): RedirectResponse
     {
         $company = DB::transaction(function () use ($request): Company {
-            $company = Company::create($request->safe()->except('due_date'));
+            $company = Company::create($request->safe()->except([
+                'auditor_name',
+                'due_date',
+                'report_summary_paragraph_one',
+                'report_summary_paragraph_two',
+            ]));
             $audit = $company->audits()->create([
                 'title' => 'Audit kepatuhan operasional',
                 'status' => 'pending',
-                'auditor_name' => $request->input('auditor_name'),
+                'auditor_name' => $request->validated('auditor_name'),
                 'due_date' => $request->date('due_date'),
+                'report_summary_paragraph_one' => $request->validated('report_summary_paragraph_one'),
+                'report_summary_paragraph_two' => $request->validated('report_summary_paragraph_two'),
             ]);
             $audit->items()->createMany(self::checklistItems());
 
@@ -55,7 +62,7 @@ class CompanyController extends Controller
      */
     public function show(Company $company): View
     {
-        return view('companies.show', ['company' => $company->load(['audits.items'])]);
+        return view('companies.show', ['company' => $company->load(['audits.items', 'audits.assignees'])]);
     }
 
     /**
@@ -63,7 +70,9 @@ class CompanyController extends Controller
      */
     public function edit(Company $company): View
     {
-        return view('companies.edit', compact('company'));
+        $audit = $company->audits()->latest()->orderByDesc('id')->first();
+
+        return view('companies.edit', compact('company', 'audit'));
     }
 
     /**
@@ -71,7 +80,24 @@ class CompanyController extends Controller
      */
     public function update(StoreCompanyRequest $request, Company $company): RedirectResponse
     {
-        $company->update($request->safe()->except('due_date'));
+        DB::transaction(function () use ($request, $company): void {
+            $company->update($request->safe()->except([
+                'auditor_name',
+                'due_date',
+                'report_summary_paragraph_one',
+                'report_summary_paragraph_two',
+            ]));
+
+            $audit = $company->audits()->latest()->orderByDesc('id')->first();
+            if ($audit) {
+                $audit->update([
+                    'auditor_name' => $request->validated('auditor_name'),
+                    'due_date' => $request->date('due_date'),
+                    'report_summary_paragraph_one' => $request->validated('report_summary_paragraph_one'),
+                    'report_summary_paragraph_two' => $request->validated('report_summary_paragraph_two'),
+                ]);
+            }
+        });
 
         return redirect()->route('companies.show', $company)->with('success', 'Data perusahaan diperbarui.');
     }

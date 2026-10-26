@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Audit;
 use App\Models\Company;
 use Illuminate\Contracts\View\View;
 
@@ -21,7 +20,7 @@ class DashboardController extends Controller
                         ->orWhere('address', 'like', "%{$search}%");
                 });
             })
-            ->with(['audits' => fn ($query) => $query->latest()->with('items')])
+            ->with(['audits' => fn ($query) => $query->latest()->with(['items', 'assignees'])])
             ->latest()
             ->get();
 

@@ -57,15 +57,34 @@ class AuditController extends Controller
 
     public function show(Audit $audit): View
     {
+        $user = request()->user();
         $audit->load(['company', 'findings', 'assignees']);
         $allItems = $audit->items()->with('hasils')->get();
         $isIspoChecklist = $allItems->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
+        $isAuditManager = $user?->canManageAssignments() ?? false;
+        $reviewablePrinciples = $isAuditManager
+            ? collect(range(1, 7))
+            : ($user?->assignedPrincipleNumbers($audit) ?? collect());
+
+        abort_unless($isAuditManager || $reviewablePrinciples->isNotEmpty(), 403);
+
+        if (! $isAuditManager) {
+            abort_unless($isIspoChecklist, 403);
+            $allItems = $allItems
+                ->filter(fn (AuditItem $item): bool => $reviewablePrinciples->contains($item->principleNumber()))
+                ->values();
+        }
 
         if ($isIspoChecklist) {
-            $principles = collect(range(1, 7))->mapWithKeys(function (int $number) use ($allItems): array {
+            $principles = $reviewablePrinciples->mapWithKeys(function (int $number) use ($allItems): array {
                 return [$number => $allItems->filter(fn (AuditItem $item): bool => (int) $item->title === $number)->values()];
             });
-            $currentPage = max(1, min(request()->integer('page', 1), 7));
+            $requestedPage = request()->integer('page', $reviewablePrinciples->first() ?? 1);
+            if ($isAuditManager) {
+                $requestedPage = max(1, min($requestedPage, 7));
+            }
+            abort_unless($reviewablePrinciples->contains($requestedPage), 403);
+            $currentPage = $requestedPage;
             $items = $principles->get($currentPage, collect());
         } else {
             $principles = collect();
@@ -78,6 +97,8 @@ class AuditController extends Controller
             'items' => $items,
             'allItems' => $allItems,
             'principles' => $principles,
+            'reviewablePrinciples' => $reviewablePrinciples,
+            'isAuditManager' => $isAuditManager,
             'isIspoChecklist' => $isIspoChecklist,
             'currentPage' => $currentPage,
         ]);
@@ -87,8 +108,7 @@ class AuditController extends Controller
         AssignAuditPrinciplesRequest $request,
         Audit $audit,
         NotificationDispatcher $notifications,
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $audit->loadMissing('company');
         $previousAssignments = $audit->assignees()->get()
             ->map(fn (User $user): string => $user->id.':'.$user->pivot->principle_number)
@@ -144,8 +164,7 @@ class AuditController extends Controller
         UpdateAuditItemRequest $request,
         AuditItem $auditItem,
         NotificationDispatcher $notifications,
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         abort_unless($request->user()?->canWorkOn($auditItem), 403);
 
         $previousStatus = $auditItem->status;
@@ -317,11 +336,15 @@ class AuditController extends Controller
 
     public function report(Audit $audit): View
     {
+        abort_unless(request()->user()?->canManageAssignments(), 403);
+
         return view('audits.report', ['audit' => $audit->load(['company', 'items.hasils', 'findings'])]);
     }
 
     public function pdf(Audit $audit): mixed
     {
+        abort_unless(request()->user()?->canManageAssignments(), 403);
+
         set_time_limit(300);
 
         $audit->load(['company', 'items.hasils', 'findings']);
@@ -345,6 +368,8 @@ class AuditController extends Controller
 
     public function download(Audit $audit): mixed
     {
+        abort_unless(request()->user()?->canManageAssignments(), 403);
+
         $audit->load(['company', 'items.hasils']);
         $items = $audit->items;
         $isIspoChecklist = $items->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
@@ -385,6 +410,7 @@ class AuditController extends Controller
             'Nama Perusahaan' => $audit->company->name ?: '-',
             'Alamat Perusahaan' => $audit->company->address ?: '-',
             'Bidang Usaha' => $audit->company->industry ?: '-',
+            'Luasan Lahan' => $audit->company->land_area ?: '-',
             'Auditor' => $audit->auditorNamesText() ?: '-',
             'Tanggal Audit' => $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-',
         ];
@@ -399,8 +425,15 @@ class AuditController extends Controller
 
         $section->addText('I. HASIL PENILAIAN', ['bold' => true, 'size' => 12, 'color' => '08755F']);
         $section->addText('Ringkasan Penilaian', ['bold' => true, 'size' => 10]);
-        $section->addText('Dalam kegiatan penilaian atau audit ISPO tahap 2 ini ditemukan beberapa ketidaksesuaian yang terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan pihak '.($audit->company->name ?: 'perusahaan').' telah melakukan tindakan perbaikan untuk pemenuhan ketidaksesuaian tersebut.');
-        $section->addText('Berikut merupakan ringkasan hasil penilaian berdasarkan prinsip, kriteria, dan indikator ISPO yang berlaku.');
+        foreach ([$audit->reportSummaryParagraphOne(), $audit->reportSummaryParagraphTwo()] as $paragraph) {
+            foreach (preg_split('/\R/', $paragraph) as $lineNumber => $line) {
+                if ($lineNumber > 0) {
+                    $section->addTextBreak();
+                }
+
+                $section->addText($line);
+            }
+        }
 
         $summaryTable = $section->addTable(['borderSize' => 6, 'borderColor' => 'D9E5DF', 'cellMargin' => 70]);
         $summaryTable->addRow();

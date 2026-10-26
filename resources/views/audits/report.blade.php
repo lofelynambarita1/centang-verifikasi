@@ -44,7 +44,7 @@
             <div class="report-facts">
                 <div><span>Nama Perusahaan</span><b>:</b><strong>{{ $audit->company->name ?: '-' }}</strong></div>
                 <div><span>Alamat Perusahaan</span><b>:</b><strong>{{ $audit->company->address ?: '-' }}</strong></div>
-                <div><span>Luasan Lahan</span><b>:</b><strong>-</strong></div>
+                <div><span>Luasan Lahan</span><b>:</b><strong>{{ $audit->company->land_area ?: '-' }}</strong></div>
                 <div><span>Auditor</span><b>:</b><strong>{{ $audit->auditorNamesText() ?: '-' }}</strong></div>
                 <div><span>Tanggal Audit</span><b>:</b><strong>{{ $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-' }}</strong></div>
             </div>
@@ -52,19 +52,8 @@
             <div class="report-introduction">
                 <h4>I. HASIL PENILAIAN</h4>
                 <h5>RINGKASAN PENILAIAN</h5>
-                <p>
-                    Dalam kegiatan penilaian/ audit ISPO Tahap 2 ini ditemukan beberapa ketidaksesuaian yang
-                    terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian
-                    Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha
-                    Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan
-                    kemudian saat ini pihak {{ $audit->company->name ?: 'perusahaan' }} telah melakukan tindakan
-                    perbaikan untuk pemenuhan ketidaksesuaian tersebut seluruhnya.
-                </p>
-                <p>
-                    Berikut ini merupakan ringkasan dari hasil penilaian yang dibuat berdasarkan Prinsip, Kriteria
-                    dan indikator ISPO seperti yang ditetapkan dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025
-                    tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit.
-                </p>
+                <p>{!! nl2br(e($audit->reportSummaryParagraphOne())) !!}</p>
+                <p>{!! nl2br(e($audit->reportSummaryParagraphTwo())) !!}</p>
             </div>
 
             <div class="report-summary">

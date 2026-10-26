@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 
 #[Fillable(['name', 'email', 'password', 'role', 'requested_role'])]
 #[Hidden(['password', 'remember_token'])]
@@ -38,6 +39,33 @@ class User extends Authenticatable
     public function canManageAssignments(): bool
     {
         return $this->isAdmin() || $this->isLeadAudit();
+    }
+
+    public function canReviewAudit(Audit $audit): bool
+    {
+        if ($this->canManageAssignments()) {
+            return true;
+        }
+
+        if ($audit->relationLoaded('assignees')) {
+            return $audit->assignees->contains('id', $this->id);
+        }
+
+        return $this->assignedPrincipleNumbers($audit)->isNotEmpty();
+    }
+
+    /**
+     * @return Collection<int, int>
+     */
+    public function assignedPrincipleNumbers(Audit $audit): Collection
+    {
+        return $this->audits()
+            ->where('audits.id', $audit->id)
+            ->pluck('audit_principle_user.principle_number')
+            ->map(fn (mixed $number): int => (int) $number)
+            ->unique()
+            ->sort()
+            ->values();
     }
 
     public function canWorkOn(AuditItem $auditItem): bool

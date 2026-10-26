@@ -27,7 +27,14 @@ class AuditWorkflowTest extends TestCase
         $response = $this->post(route('companies.store'), [
             'name' => 'PT Test Verifikasi',
             'industry' => 'Manufaktur',
+            'address' => 'Jl. Contoh No. 1',
+            'land_area' => '1.250 ha',
+            'contact_name' => 'Dina PIC',
+            'contact_email' => 'dina@example.com',
+            'auditor_name' => 'Auditor Satu, Auditor Dua',
             'due_date' => '2026-10-01',
+            'report_summary_paragraph_one' => 'Ringkasan kustom paragraf pertama.',
+            'report_summary_paragraph_two' => 'Ringkasan kustom paragraf kedua.',
         ]);
 
         $company = Company::where('name', 'PT Test Verifikasi')->firstOrFail();
@@ -35,6 +42,21 @@ class AuditWorkflowTest extends TestCase
 
         $response->assertRedirect(route('audits.show', $audit));
         $this->assertDatabaseHas('audits', ['company_id' => $company->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('companies', [
+            'id' => $company->id,
+            'industry' => 'Manufaktur',
+            'address' => 'Jl. Contoh No. 1',
+            'land_area' => '1.250 ha',
+            'contact_name' => 'Dina PIC',
+            'contact_email' => 'dina@example.com',
+        ]);
+        $this->assertDatabaseHas('audits', [
+            'id' => $audit->id,
+            'auditor_name' => 'Auditor Satu, Auditor Dua',
+            'due_date' => '2026-10-01 00:00:00',
+            'report_summary_paragraph_one' => 'Ringkasan kustom paragraf pertama.',
+            'report_summary_paragraph_two' => 'Ringkasan kustom paragraf kedua.',
+        ]);
         $this->assertSame(count($canonical), $audit->items()->count());
         $this->assertSame(
             $canonical[0]['title'],
@@ -44,6 +66,73 @@ class AuditWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Prinsip verifikasi')
             ->assertSee('Prinsip 2');
+    }
+
+    public function test_company_edit_updates_company_details_and_latest_audit_information(): void
+    {
+        $company = Company::factory()->create();
+        $olderAudit = $company->audits()->create([
+            'title' => 'Audit lama',
+            'auditor_name' => 'Auditor Lama',
+            'due_date' => '2026-09-01',
+        ]);
+        $latestAudit = $company->audits()->create([
+            'title' => 'Audit terbaru',
+            'auditor_name' => 'Auditor Sebelumnya',
+            'due_date' => '2026-10-01',
+            'report_summary_paragraph_one' => 'Isi paragraf lama satu.',
+            'report_summary_paragraph_two' => 'Isi paragraf lama dua.',
+        ]);
+
+        $this->get(route('companies.edit', $company))
+            ->assertSee('>Auditor Sebelumnya</textarea>', false)
+            ->assertSee('value="2026-10-01"', false)
+            ->assertSee('>Isi paragraf lama satu.</textarea>', false)
+            ->assertSee('>Isi paragraf lama dua.</textarea>', false);
+
+        $response = $this->put(route('companies.update', $company), [
+            'name' => 'PT Perusahaan Lengkap',
+            'industry' => 'Perkebunan',
+            'address' => 'Alamat terbaru',
+            'land_area' => '2.500 ha',
+            'contact_name' => 'PIC Terbaru',
+            'contact_email' => 'pic@example.com',
+            'auditor_name' => "Auditor Satu\nAuditor Dua",
+            'due_date' => '2026-11-15',
+            'report_summary_paragraph_one' => 'Penilaian khusus untuk PT Perusahaan Lengkap.',
+            'report_summary_paragraph_two' => "Ringkasan hasil\nberlanjut di baris kedua.",
+        ]);
+
+        $response->assertRedirect(route('companies.show', $company));
+        $this->assertDatabaseHas('companies', [
+            'id' => $company->id,
+            'name' => 'PT Perusahaan Lengkap',
+            'industry' => 'Perkebunan',
+            'address' => 'Alamat terbaru',
+            'land_area' => '2.500 ha',
+            'contact_name' => 'PIC Terbaru',
+            'contact_email' => 'pic@example.com',
+        ]);
+        $this->assertDatabaseHas('audits', [
+            'id' => $latestAudit->id,
+            'auditor_name' => "Auditor Satu\nAuditor Dua",
+            'due_date' => '2026-11-15 00:00:00',
+            'report_summary_paragraph_one' => 'Penilaian khusus untuk PT Perusahaan Lengkap.',
+            'report_summary_paragraph_two' => "Ringkasan hasil\nberlanjut di baris kedua.",
+        ]);
+        $this->assertDatabaseHas('audits', [
+            'id' => $olderAudit->id,
+            'auditor_name' => 'Auditor Lama',
+            'due_date' => '2026-09-01 00:00:00',
+        ]);
+
+        $this->get(route('audits.report', $latestAudit))
+            ->assertSee('2.500 ha')
+            ->assertSee('Auditor Satu')
+            ->assertSee('Auditor Dua')
+            ->assertSee('Penilaian khusus untuk PT Perusahaan Lengkap.')
+            ->assertSee('Ringkasan hasil')
+            ->assertSee('berlanjut di baris kedua.');
     }
 
     public function test_sync_command_unifies_legacy_audits_with_the_reference_checklist(): void
@@ -98,6 +187,21 @@ class AuditWorkflowTest extends TestCase
             ->assertSee('Prinsip 12');
     }
 
+    public function test_audit_status_selector_offers_only_three_review_statuses(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit status']);
+        $item = $audit->items()->create(['title' => 'Indikator status', 'sort_order' => 1]);
+
+        $this->get(route('audits.show', $audit))
+            ->assertSee('id="status-'.$item->id.'" name="status" data-audit-status required', false)
+            ->assertDontSee('<option value="pending"', false)
+            ->assertSee('<option value="compliant"', false)
+            ->assertSee('<option value="non_compliant"', false)
+            ->assertSee('<option value="not_applicable"', false)
+            ->assertSee('<option value="" selected disabled hidden></option>', false);
+    }
+
     public function test_audit_report_renders_all_checklist_items(): void
     {
         $company = Company::factory()->create();
@@ -128,6 +232,35 @@ class AuditWorkflowTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
         $this->assertStringContainsString('laporan-verifikasi-ispo-', (string) $response->headers->get('content-disposition'));
+    }
+
+    public function test_audit_pdf_uses_the_original_letterhead_and_auditee_format(): void
+    {
+        $company = Company::factory()->create(['name' => 'PT Template Verifikasi']);
+        $audit = $company->audits()->create(['title' => 'Audit template']);
+        $audit->items()->create([
+            'title' => '1.1.1 Izin lokasi',
+            'description' => 'Dokumen izin lokasi tersedia.',
+            'sort_order' => 1,
+        ]);
+        $audit->load(['company', 'items.hasils', 'findings']);
+        $items = $audit->items;
+
+        $html = view('audits.pdf', [
+            'audit' => $audit,
+            'items' => $items,
+            'isIspoChecklist' => false,
+            'principles' => collect(),
+        ])->render();
+
+        $this->assertStringContainsString('class="gis-letterhead" src="data:image/jpeg;base64,', $html);
+        $this->assertStringContainsString('FrO. 8603/GIS-1.1', $html);
+        $this->assertStringContainsString('(PT TEMPLATE VERIFIKASI)', $html);
+        $this->assertStringNotContainsString('(AUDITEE / PT TEMPLATE VERIFIKASI)', $html);
+        $this->assertStringContainsString('top: 0;', $html);
+        $this->assertStringContainsString('width: 92%;', $html);
+        $this->assertStringContainsString('<col style="width: 68pt">', $html);
+        $this->assertStringContainsString('text-align: left;', $html);
     }
 
     public function test_audit_pdf_download_handles_the_full_ispo_checklist(): void

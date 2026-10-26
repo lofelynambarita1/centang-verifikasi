@@ -177,7 +177,11 @@
                                 <div class="cell-meta"><strong>{{ $row['verified_items'] }}</strong> / {{ $row['total_items'] }} indikator dinilai</div>
                             </td>
                             <td>
-                                <a class="link" href="{{ $audit ? route('audits.show', $audit) : route('companies.show', $row['company']) }}">Rincian</a>
+                                @if ($audit && auth()->user()->canReviewAudit($audit))
+                                    <a class="link" href="{{ route('audits.show', $audit) }}">Review</a>
+                                @elseif (! $audit)
+                                    <a class="link" href="{{ route('companies.show', $row['company']) }}">Rincian</a>
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -256,7 +260,11 @@
                             $feedClass = $audit->status === 'completed' ? 'chip--done' : ($audit->status === 'in_progress' ? 'chip--wip' : 'chip--todo');
                             $feedLabel = $audit->status === 'completed' ? 'Selesai' : ($audit->status === 'in_progress' ? 'Proses verifikasi' : 'Belum mulai');
                         @endphp
-                        <a class="feed__item" href="{{ route('audits.show', $audit) }}">
+                        @if (auth()->user()->canReviewAudit($audit))
+                            <a class="feed__item" href="{{ route('audits.show', $audit) }}">
+                        @else
+                            <div class="feed__item">
+                        @endif
                             <div class="feed__avatar {{ $avatarColors[$loop->index % 5] }}">{{ $initials($audit->company->name) }}</div>
                             <div class="feed__body">
                                 <strong>{{ $audit->title ?: $audit->company->name }}</strong>
@@ -266,7 +274,11 @@
                                 <span class="chip {{ $feedClass }}">{{ $feedLabel }}</span>
                                 <strong class="feed__pct">{{ $feedPct }}%</strong>
                             </div>
-                        </a>
+                        @if (auth()->user()->canReviewAudit($audit))
+                            </a>
+                        @else
+                            </div>
+                        @endif
                     @empty
                         <div class="feed__empty">
                             <p>Belum ada aktivitas audit.</p>

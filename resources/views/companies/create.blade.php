@@ -10,7 +10,7 @@
     <section class="panel panel--pad form-card">
         <form class="form" method="POST" action="{{ route('companies.store') }}">
             @csrf
-            @include('companies._form', ['company' => null])
+            @include('companies._form', ['company' => null, 'audit' => null])
             <div class="form-actions">
                 <a class="btn btn--ghost" href="{{ route('companies.index') }}">Kembali</a>
                 <button class="btn btn--primary form-submit" type="submit">Simpan dan buat checklist</button>

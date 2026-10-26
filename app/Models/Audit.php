@@ -15,7 +15,8 @@ class Audit extends Model
     use HasFactory;
 
     protected $fillable = [
-        'company_id', 'title', 'status', 'auditor_name', 'due_date', 'completed_at',
+        'company_id', 'title', 'status', 'auditor_name', 'due_date',
+        'report_summary_paragraph_one', 'report_summary_paragraph_two', 'completed_at',
     ];
 
     protected function casts(): array
@@ -69,5 +70,25 @@ class Audit extends Model
     public function auditorNamesText(): string
     {
         return implode(', ', $this->auditorNames());
+    }
+
+    public function reportSummaryParagraphOne(): string
+    {
+        $default = str_replace(
+            ':company',
+            $this->company?->name ?: 'perusahaan',
+            (string) config('ispo.report_summary.paragraph_one'),
+        );
+
+        return filled($this->report_summary_paragraph_one)
+            ? $this->report_summary_paragraph_one
+            : $default;
+    }
+
+    public function reportSummaryParagraphTwo(): string
+    {
+        return filled($this->report_summary_paragraph_two)
+            ? $this->report_summary_paragraph_two
+            : (string) config('ispo.report_summary.paragraph_two');
     }
 }

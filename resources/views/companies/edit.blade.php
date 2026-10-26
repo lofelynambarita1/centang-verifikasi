@@ -11,7 +11,7 @@
         <form class="form" method="POST" action="{{ route('companies.update', $company) }}">
             @csrf
             @method('PUT')
-            @include('companies._form', ['company' => $company])
+            @include('companies._form', ['company' => $company, 'audit' => $audit])
             <div class="form-actions">
                 <a class="btn btn--ghost" href="{{ route('companies.show', $company) }}">Kembali</a>
                 <button class="btn btn--primary form-submit" type="submit">Simpan perubahan</button>
