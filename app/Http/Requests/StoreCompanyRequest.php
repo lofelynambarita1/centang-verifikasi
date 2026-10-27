@@ -28,8 +28,6 @@ class StoreCompanyRequest extends FormRequest
             'address' => ['nullable', 'string', 'max:500'],
             'contact_name' => ['nullable', 'string', 'max:255'],
             'contact_email' => ['nullable', 'email', 'max:255'],
-            'auditor_name' => ['nullable', 'string', 'max:500'],
-            'due_date' => ['nullable', 'date'],
         ];
     }
 }

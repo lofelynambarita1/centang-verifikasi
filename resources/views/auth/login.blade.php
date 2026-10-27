@@ -30,7 +30,6 @@
         <label class="check-control"><input type="checkbox" name="remember"> Ingat perangkat ini</label>
         <button class="btn btn--primary btn--block" type="submit">Masuk ke dashboard</button>
     </form>
-    <p class="auth-switch">Belum punya akun? <a href="{{ route('register') }}">Daftar akun</a></p>
 </main>
 </body>
 </html>

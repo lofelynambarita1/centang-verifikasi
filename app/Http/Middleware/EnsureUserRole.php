@@ -15,7 +15,19 @@ class EnsureUserRole
      */
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
-        abort_unless($request->user() && in_array($request->user()->role, $roles, true), 403);
+        $user = $request->user();
+        $userRole = is_object($user?->role) ? $user->role->name : ($user?->roleName() ?? $user?->role);
+
+        $isAuthorized = false;
+        if ($user && $userRole) {
+            if (in_array($userRole, $roles, true)) {
+                $isAuthorized = true;
+            } elseif ($userRole === 'lead_audit' && in_array('auditor', $roles, true)) {
+                $isAuthorized = true;
+            }
+        }
+
+        abort_unless($isAuthorized, 403);
 
         return $next($request);
     }

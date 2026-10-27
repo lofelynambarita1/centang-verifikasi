@@ -5,6 +5,9 @@
 @section('heading', 'Penugasan auditor')
 
 @section('actions')
+    @if (auth()->user()?->isAdmin())
+        <a class="btn btn--primary" href="{{ route('audits.create') }}">+ Buat Proyek Audit Baru</a>
+    @endif
     <a class="btn btn--ghost" href="{{ route('companies.index') }}">Perusahaan</a>
 @endsection
 
@@ -17,41 +20,73 @@
                 <thead>
                     <tr>
                         <th>Perusahaan dan audit</th>
-                        <th>Tanggal dan status</th>
-                        <th>Penugasan</th>
+                        <th>Rentang tanggal dan status</th>
+                        <th>Lead Auditor dan tim</th>
+                        <th>Progres indikator</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($audits as $audit)
+                        @php
+                            $totalItems = $audit->items->count();
+                            $verifiedItems = $audit->items->whereIn('status', ['compliant', 'non_compliant', 'not_applicable'])->count();
+                            $progress = $totalItems ? round($verifiedItems / $totalItems * 100) : 0;
+                            $teamAuditorNames = $audit->teamAuditors()
+                                ->reject(fn ($user) => $user->id === $audit->leadMember?->user_id)
+                                ->pluck('name')
+                                ->implode(', ');
+                        @endphp
                         <tr>
                             <td>
                                 <strong>{{ $audit->company->name }}</strong>
                                 <div class="cell-meta">{{ $audit->title ?: 'Audit Verifikasi ISPO' }}</div>
                             </td>
                             <td>
-                                <strong>{{ $audit->due_date?->translatedFormat('d F Y') ?: 'Belum ditentukan' }}</strong>
+                                <strong>
+                                    @if ($audit->start_date || $audit->end_date)
+                                        {{ $audit->start_date?->translatedFormat('d M Y') ?: 'Belum ditentukan' }}
+                                        – {{ $audit->end_date?->translatedFormat('d M Y') ?: 'Belum ditentukan' }}
+                                    @else
+                                        Belum ditentukan
+                                    @endif
+                                </strong>
                                 <div class="cell-meta">
                                     {{ $audit->status === 'completed' ? 'Selesai' : ($audit->status === 'in_progress' ? 'Sedang diverifikasi' : 'Belum mulai') }}
                                 </div>
                             </td>
                             <td>
-                                <strong>{{ $audit->assignees_count }}</strong>
-                                <div class="cell-meta">penugasan prinsip</div>
+                                <div>Lead Auditor: <strong>{{ $audit->leadMember?->user?->name ?: 'Belum ditugaskan' }}</strong></div>
+                                <div class="cell-meta">Tim: {{ $teamAuditorNames ?: 'Belum ditentukan' }}</div>
+                            </td>
+                            <td>
+                                <div class="progress">
+                                    <div class="progress__track">
+                                        <div class="progress__bar" style="width:{{ $progress }}%"></div>
+                                    </div>
+                                    <span class="progress__pct">{{ $progress }}%</span>
+                                </div>
+                                <div class="cell-meta"><strong>{{ $verifiedItems }}</strong> / {{ $totalItems }} Indikator Selesai</div>
                             </td>
                             <td>
                                 <div class="cell-actions">
-                                    <a class="btn btn--primary btn--sm" href="{{ route('audits.assignments.edit', $audit) }}">Atur penanggung jawab</a>
+                                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', $audit) }}">Buka Checklist</a>
+                                    <a class="btn btn--primary btn--sm" href="{{ route('audits.assignments.edit', $audit) }}">Atur Tim/Penugasan</a>
+                                    <a class="btn btn--ghost btn--sm" href="{{ route('audits.report', $audit) }}">Laporan</a>
                                 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4">
+                            <td colspan="5">
                                 <div class="empty">
                                     <strong>Belum ada audit ISPO</strong>
                                     <span>Audit ISPO yang tersedia untuk penugasan akan muncul di sini.</span>
-                                    <a class="btn btn--primary" href="{{ route('companies.index') }}">Lihat perusahaan</a>
+                                    @if (auth()->user()?->isAdmin())
+                                        <a class="btn btn--primary" href="{{ route('audits.create') }}">+ Buat Proyek Audit Baru</a>
+                                    @else
+                                        <a class="btn btn--primary" href="{{ route('companies.index') }}">Lihat perusahaan</a>
+                                    @endif
                                 </div>
                             </td>
                         </tr>

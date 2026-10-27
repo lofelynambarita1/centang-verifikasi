@@ -154,6 +154,12 @@
             letter-spacing: .03em;
         }
 
+        .principle-summary-table th,
+        .principle-summary-table td {
+            font-size: 9px;
+            padding: 5px 4px;
+        }
+
         .principle-title {
             margin: 16px 0 10px;
             padding-bottom: 4px;
@@ -328,9 +334,41 @@
         <table class="pdf-facts">
             <tr><td class="k">Nama Perusahaan</td><td class="s">:</td><td>{{ $audit->company->name ?: '-' }}</td></tr>
             <tr><td class="k">Alamat Perusahaan</td><td class="s">:</td><td>{{ $audit->company->address ?: '-' }}</td></tr>
-            <tr><td class="k">Luasan Lahan</td><td class="s">:</td><td>-</td></tr>
-            <tr><td class="k">Auditor</td><td class="s">:</td><td>{{ $audit->auditorNamesText() ?: '-' }}</td></tr>
-            <tr><td class="k">Tanggal Audit</td><td class="s">:</td><td>{{ $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-' }}</td></tr>
+            <tr><td class="k">Bidang Usaha</td><td class="s">:</td><td>{{ $audit->company->industry ?: '-' }}</td></tr>
+            <tr><td class="k">PIC Perusahaan</td><td class="s">:</td><td>{{ $audit->company->contact_name ?: '-' }}</td></tr>
+            <tr><td class="k">Judul / Jenis Audit</td><td class="s">:</td><td>{{ $audit->title ?: '-' }}</td></tr>
+            <tr><td class="k">Tanggal Pelaksanaan</td><td class="s">:</td><td>{{ $audit->start_date?->locale('id')->translatedFormat('d F Y') ?: '-' }} – {{ $audit->end_date?->locale('id')->translatedFormat('d F Y') ?: '-' }}</td></tr>
+            <tr><td class="k">Ruang Lingkup</td><td class="s">:</td><td>{{ $audit->scope ?: 'Standar ISPO' }}</td></tr>
+            <tr><td class="k">Lead Auditor</td><td class="s">:</td><td>{{ $leadAuditor?->name ?: $audit->auditorNamesText() ?: '-' }}</td></tr>
+            <tr><td class="k">Status Verifikasi Akhir</td><td class="s">:</td><td>{{ $audit->status === 'completed' ? 'Selesai' : 'Belum selesai' }}</td></tr>
+        </table>
+
+        <div class="section-title">REKAPITULASI KEPATUHAN 7 PRINSIP ISPO</div>
+        <table class="summary-table principle-summary-table">
+            <thead>
+                <tr>
+                    <th>Prinsip</th>
+                    <th>Indikator</th>
+                    <th>Memenuhi</th>
+                    <th>Tidak memenuhi</th>
+                    <th>NA</th>
+                    <th>Belum diperiksa</th>
+                    <th>Auditor ditugaskan</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (range(1, 7) as $principleNumber)
+                    <tr>
+                        <td>{{ $principleNumber }}. {{ $principleTitles[$principleNumber] ?? '' }}</td>
+                        <td>{{ $principleSummaries[$principleNumber]['total'] }}</td>
+                        <td>{{ $principleSummaries[$principleNumber]['compliant'] }}</td>
+                        <td>{{ $principleSummaries[$principleNumber]['non_compliant'] }}</td>
+                        <td>{{ $principleSummaries[$principleNumber]['not_applicable'] }}</td>
+                        <td>{{ $principleSummaries[$principleNumber]['pending'] }}</td>
+                        <td>{{ $principleAuditors[$principleNumber]->join(', ') ?: '-' }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
         </table>
 
         <div class="section-title">I. HASIL PENILAIAN</div>
@@ -421,9 +459,13 @@
                     @empty
                         <tr>
                             <td class="record-label">Hasil Audit</td>
-                            <td class="record-value">{{ $item->note ?: '-' }}</td>
+                            <td class="record-value">-</td>
                         </tr>
                     @endforelse
+                    <tr>
+                        <td class="record-label">Catatan Evaluasi</td>
+                        <td class="record-value">{{ $item->note ?: '-' }}</td>
+                    </tr>
                     <tr>
                         <td class="record-label">Status</td>
                         <td class="record-value status-{{ $item->status }}"><strong>{{ $statusLabels[$item->status] ?? 'Belum diperiksa' }}</strong></td>
@@ -434,9 +476,19 @@
             <div class="record"><p class="record-head">Belum ada indikator verifikasi untuk audit ini.</p></div>
         @endforelse
 
-        @if ($nonCompliant > 0)
-            <div class="section-title">TEMUAN AUDIT</div>
+        <div class="section-title">RINGKASAN KETIDAKSESUAIAN / TEMUAN</div>
+        @if ($audit->findings->isEmpty() && $items->where('status', 'non_compliant')->isEmpty())
+            <p class="summary-intro">Tidak ada temuan ketidaksesuaian yang dicatat.</p>
+        @else
             <ul class="findings">
+                @foreach ($audit->findings as $finding)
+                    <li>
+                        <strong>{{ $finding->note }}</strong>
+                        @if ($finding->recommendation)
+                            — {{ $finding->recommendation }}
+                        @endif
+                    </li>
+                @endforeach
                 @foreach ($items->where('status', 'non_compliant') as $item)
                     <li><strong>{{ $item->title }}</strong> — {{ $item->note ?: 'Belum ada catatan tindak lanjut.' }}</li>
                 @endforeach
@@ -447,13 +499,13 @@
             <tr>
                 <td>
                     <div class="sign-line"></div>
-                    <div class="sign-label">{{ $audit->auditorNamesText() ?: '(Nama Auditor)' }}</div>
+                    <div class="sign-label">{{ $assignedAuditorNames ?: '(Nama Auditor)' }}</div>
                     <div class="sign-role">Auditor</div>
                 </td>
                 <td>
                     <div class="sign-line"></div>
-                    <div class="sign-label">(Nama Pimpinan Perusahaan)</div>
-                    <div class="sign-role">{{ $audit->company->name ?: 'Pimpinan Perusahaan' }}</div>
+                    <div class="sign-label">{{ $leadAuditor?->name ?: '(Nama Lead Auditor)' }}</div>
+                    <div class="sign-role">Lead Auditor</div>
                 </td>
             </tr>
         </table>

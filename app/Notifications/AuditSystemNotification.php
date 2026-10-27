@@ -12,7 +12,7 @@ class AuditSystemNotification extends Notification
         public readonly string $title,
         public readonly string $message,
         public readonly string $url,
-    ) { }
+    ) {}
 
     /**
      * Get the notification's delivery channels.

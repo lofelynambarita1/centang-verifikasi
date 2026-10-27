@@ -2,18 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProjectRole;
 use App\Http\Requests\AssignAuditPrinciplesRequest;
+use App\Http\Requests\StoreAuditRequest;
 use App\Http\Requests\UpdateAuditItemRequest;
 use App\Models\Audit;
 use App\Models\AuditHasil;
 use App\Models\AuditItem;
+use App\Models\AuditProjectMember;
+use App\Models\Company;
 use App\Models\User;
 use App\Notifications\AuditSystemNotification;
+use App\Support\IspoChecklist;
 use App\Support\NotificationDispatcher;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpWord\IOFactory;
@@ -21,11 +27,84 @@ use PhpOffice\PhpWord\PhpWord;
 
 class AuditController extends Controller
 {
+    public function create(): View
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        $companies = Company::orderBy('name')->get();
+        $auditors = User::query()
+            ->where('role', 'auditor')
+            ->whereNull('requested_role')
+            ->orderBy('name')
+            ->get();
+        $selectedCompanyId = request()->integer('company_id') ?: null;
+
+        return view('audits.create', compact('companies', 'auditors', 'selectedCompanyId'));
+    }
+
+    public function store(StoreAuditRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+        $company = Company::findOrFail($validated['company_id']);
+        $leadAuditor = User::findOrFail($validated['lead_auditor_id']);
+
+        $audit = DB::transaction(function () use ($validated, $company, $leadAuditor): Audit {
+            $title = ! empty($validated['title'])
+                ? $validated['title']
+                : "Audit Verifikasi ISPO {$company->name}";
+
+            $scope = ! empty($validated['scope'])
+                ? $validated['scope']
+                : 'Standar ISPO';
+
+            $audit = Audit::create([
+                'company_id' => $company->id,
+                'title' => $title,
+                'status' => 'pending',
+                'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'],
+                'due_date' => $validated['end_date'],
+                'scope' => $scope,
+                'auditor_name' => $leadAuditor->name,
+            ]);
+
+            // Buat checklist kriteria ISPO terkait secara otomatis (7 prinsip)
+            $items = collect(IspoChecklist::items())
+                ->map(fn (array $item, int $pos): array => $item + [
+                    'sort_order' => $pos,
+                    'status' => 'pending',
+                ])
+                ->values()
+                ->all();
+
+            $audit->items()->createMany($items);
+
+            // Daftarkan Lead Auditor langsung ke tabel AuditProjectMember dengan project_role = 'lead_audit'
+            AuditProjectMember::create([
+                'audit_id' => $audit->id,
+                'user_id' => $leadAuditor->id,
+                'project_role' => ProjectRole::LeadAudit->value,
+                'added_by' => auth()->id(),
+            ]);
+
+            return $audit;
+        });
+
+        return redirect()->route('audits.assignments.edit', $audit)
+            ->with('success', "Proyek audit untuk {$company->name} berhasil dibuat. Silakan atur penugasan prinsip untuk tim auditor.");
+    }
+
     public function assignmentsIndex(): View
     {
+        abort_unless(auth()->user()?->canManageAssignments(), 403);
+
         $audits = Audit::query()
-            ->with(['company:id,name', 'items:id,audit_id,title'])
-            ->withCount('assignees')
+            ->with([
+                'company:id,name',
+                'items:id,audit_id,title,status',
+                'leadMember.user:id,name,email',
+                'members.user:id,name,role,requested_role',
+            ])
             ->latest()
             ->get()
             ->filter(fn (Audit $audit): bool => $audit->items->contains(
@@ -38,26 +117,40 @@ class AuditController extends Controller
 
     public function assignmentsEdit(Audit $audit): View
     {
-        abort_unless(auth()->user()?->canManageAssignments(), 403);
+        abort_unless(auth()->user()?->canManageAssignments($audit), 403);
 
-        $audit->load(['company:id,name', 'assignees', 'items:id,audit_id,title']);
+        $audit->load([
+            'company:id,name',
+            'assignees',
+            'items:id,audit_id,title',
+            'leadMember.user:id,name,email,role',
+            'members.user:id,name,email,role',
+        ]);
         abort_unless($audit->items->contains(
             fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1,
         ), 404);
 
+        $availableAuditors = User::query()
+            ->whereNull('requested_role')
+            ->where('role', '!=', 'admin')
+            ->orderBy('name')
+            ->get();
+
+        $teamAuditors = $audit->teamAuditors();
+
         return view('audits.assignment-edit', [
             'audit' => $audit,
-            'users' => User::query()
-                ->whereNull('requested_role')
-                ->whereIn('role', ['lead_audit', 'auditor'])
-                ->orderBy('name')
-                ->get(),
+            'availableAuditors' => $availableAuditors,
+            'teamAuditors' => $teamAuditors,
+            'projectAuditors' => $teamAuditors,
+            'users' => $teamAuditors,
         ]);
     }
 
     public function show(Audit $audit): View
     {
         $audit->load(['company', 'findings', 'assignees']);
+        $canDownloadReport = auth()->user() !== null && $audit->userCanAccessReport(auth()->user());
         $allItems = $audit->items()->with('hasils')->get();
         $isIspoChecklist = $allItems->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
 
@@ -80,6 +173,7 @@ class AuditController extends Controller
             'principles' => $principles,
             'isIspoChecklist' => $isIspoChecklist,
             'currentPage' => $currentPage,
+            'canDownloadReport' => $canDownloadReport,
         ]);
     }
 
@@ -87,17 +181,84 @@ class AuditController extends Controller
         AssignAuditPrinciplesRequest $request,
         Audit $audit,
         NotificationDispatcher $notifications,
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
+        abort_unless($request->user()?->canManageAssignments($audit), 403);
+
         $audit->loadMissing('company');
+        $validated = $request->validated();
+
+        // 1. Tentukan Lead Auditor proyek
+        $leadAuditorId = null;
+        if (array_key_exists('lead_auditor_id', $validated)) {
+            $leadAuditorId = ! empty($validated['lead_auditor_id']) ? (int) $validated['lead_auditor_id'] : null;
+        } elseif ($audit->leadMember) {
+            $leadAuditorId = (int) $audit->leadMember->user_id;
+        }
+
+        // 2. Periksa anggota tim proyek yang dipilih
+        $teamMemberIds = collect($validated['team_members'] ?? [])
+            ->map(fn ($id): int => (int) $id)
+            ->reject(fn (int $id): bool => $id === $leadAuditorId)
+            ->unique()
+            ->values()
+            ->all();
+
+        $allowedMemberIds = array_values(array_unique(array_filter(array_merge(
+            $leadAuditorId ? [$leadAuditorId] : [],
+            $teamMemberIds,
+        ))));
+
+        if ($leadAuditorId) {
+            AuditProjectMember::where('audit_id', $audit->id)
+                ->whereIn('project_role', [ProjectRole::LeadAudit->value, ProjectRole::LeadAuditor->value])
+                ->where('user_id', '!=', $leadAuditorId)
+                ->delete();
+
+            AuditProjectMember::updateOrCreate(
+                ['audit_id' => $audit->id, 'user_id' => $leadAuditorId],
+                [
+                    'project_role' => ProjectRole::LeadAudit->value,
+                    'added_by' => auth()->id(),
+                ]
+            );
+        } else {
+            AuditProjectMember::where('audit_id', $audit->id)
+                ->whereIn('project_role', [ProjectRole::LeadAudit->value, ProjectRole::LeadAuditor->value])
+                ->delete();
+        }
+
+        foreach ($teamMemberIds as $memberId) {
+            AuditProjectMember::updateOrCreate(
+                ['audit_id' => $audit->id, 'user_id' => $memberId],
+                [
+                    'project_role' => ProjectRole::Auditor->value,
+                    'added_by' => auth()->id(),
+                ]
+            );
+        }
+
+        AuditProjectMember::where('audit_id', $audit->id)
+            ->whereNotIn('user_id', $allowedMemberIds)
+            ->delete();
+        $audit->assignees()->whereNotIn('users.id', $allowedMemberIds)->detach();
+
+        // Ambil daftar anggota tim proyek yang sah
+        $currentProjectMemberIds = AuditProjectMember::where('audit_id', $audit->id)
+            ->pluck('user_id')
+            ->all();
+
+        // 3. Kelola penugasan prinsip audit
         $previousAssignments = $audit->assignees()->get()
             ->map(fn (User $user): string => $user->id.':'.$user->pivot->principle_number)
             ->all();
-        $assignments = collect($request->validated()['assignments'])
-            ->flatMap(fn (array $assignment): array => collect($assignment['users'] ?? [])->unique()->map(fn (int $userId): array => [
-                'user_id' => $userId,
-                'principle_number' => $assignment['principle'],
-            ])->all())
+
+        $assignments = collect($validated['assignments'] ?? [])
+            ->filter(fn (array $assignment): bool => ! empty($assignment['user_id']))
+            ->filter(fn (array $assignment): bool => in_array((int) $assignment['user_id'], $currentProjectMemberIds, true))
+            ->map(fn (array $assignment): array => [
+                'user_id' => (int) $assignment['user_id'],
+                'principle_number' => (int) $assignment['principle'],
+            ])
             ->values()
             ->all();
 
@@ -116,6 +277,7 @@ class AuditController extends Controller
             ]);
         }
 
+        // 4. Kirim notifikasi
         $assignedUsers = User::query()
             ->whereNull('requested_role')
             ->whereIn('id', $newAssignments->keys())
@@ -137,15 +299,15 @@ class AuditController extends Controller
             ));
         }
 
-        return back()->with('success', 'Penugasan prinsip audit berhasil diperbarui.');
+        return redirect()->route('audits.assignments.index')
+            ->with('success', 'Penugasan tim audit berhasil diperbarui.');
     }
 
     public function updateItem(
         UpdateAuditItemRequest $request,
         AuditItem $auditItem,
         NotificationDispatcher $notifications,
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         abort_unless($request->user()?->canWorkOn($auditItem), 403);
 
         $previousStatus = $auditItem->status;
@@ -270,11 +432,17 @@ class AuditController extends Controller
         string $title,
         string $message,
     ): void {
+        $leadUser = $audit->leadMember?->user;
         $recipients = User::query()
             ->whereNull('requested_role')
             ->whereIn('role', ['admin', 'lead_audit'])
             ->where('id', '!=', $actorId)
             ->get();
+
+        if ($leadUser && $leadUser->id !== $actorId && $leadUser->requested_role === null) {
+            $recipients->push($leadUser);
+            $recipients = $recipients->unique('id');
+        }
 
         $notifications->send($recipients, new AuditSystemNotification(
             $event,
@@ -289,7 +457,7 @@ class AuditController extends Controller
 
     public function complete(Audit $audit, NotificationDispatcher $notifications): RedirectResponse
     {
-        abort_unless(auth()->user()?->canManageAssignments(), 403);
+        abort_unless(auth()->user()?->isLeadAuditor($audit) || auth()->user()?->isAdmin(), 403, 'Hanya Lead Auditor atau Admin yang berhak menyelesaikan audit.');
 
         $audit->load(['items', 'company']);
         abort_if($audit->items->contains('status', 'pending'), 422, 'Semua item checklist harus diisi terlebih dahulu.');
@@ -297,12 +465,18 @@ class AuditController extends Controller
         $audit->update(['status' => 'completed', 'completed_at' => now()]);
 
         $actorId = (int) auth()->id();
+        $leadUser = $audit->leadMember?->user;
         $recipients = $audit->assignees()->whereNull('requested_role')->get()
             ->merge(User::query()
                 ->whereNull('requested_role')
                 ->whereIn('role', ['admin', 'lead_audit'])
-                ->get())
-            ->unique('id')
+                ->get());
+
+        if ($leadUser && $leadUser->requested_role === null) {
+            $recipients->push($leadUser);
+        }
+
+        $recipients = $recipients->unique('id')
             ->reject(fn (User $user): bool => $user->id === $actorId);
 
         $notifications->send($recipients, new AuditSystemNotification(
@@ -317,14 +491,34 @@ class AuditController extends Controller
 
     public function report(Audit $audit): View
     {
-        return view('audits.report', ['audit' => $audit->load(['company', 'items.hasils', 'findings'])]);
+        abort_unless(auth()->user() !== null && $audit->userCanAccessReport(auth()->user()), 403);
+
+        return view('audits.report', [
+            'audit' => $audit->load([
+                'company',
+                'items.hasils',
+                'findings',
+                'assignees',
+                'leadMember.user',
+                'members.user',
+            ]),
+        ]);
     }
 
     public function pdf(Audit $audit): mixed
     {
+        abort_unless(auth()->user() !== null && $audit->userCanAccessReport(auth()->user()), 403);
+
         set_time_limit(300);
 
-        $audit->load(['company', 'items.hasils', 'findings']);
+        $audit->load([
+            'company',
+            'items.hasils',
+            'findings',
+            'assignees',
+            'leadMember.user',
+            'members.user',
+        ]);
         $items = $audit->items;
         $isIspoChecklist = $items->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
         $principles = $isIspoChecklist
@@ -332,12 +526,41 @@ class AuditController extends Controller
                 $number => $items->filter(fn (AuditItem $item): bool => (int) $item->title === $number)->values(),
             ])
             : collect();
+        $principleSummaries = collect(range(1, 7))->mapWithKeys(function (int $number) use ($items): array {
+            $principleItems = $items->filter(fn (AuditItem $item): bool => $item->principleNumber() === $number);
+
+            return [$number => [
+                'total' => $principleItems->count(),
+                'compliant' => $principleItems->where('status', 'compliant')->count(),
+                'non_compliant' => $principleItems->where('status', 'non_compliant')->count(),
+                'not_applicable' => $principleItems->where('status', 'not_applicable')->count(),
+                'pending' => $principleItems->where('status', 'pending')->count(),
+            ]];
+        });
+        $principleAuditors = collect(range(1, 7))->mapWithKeys(fn (int $number): array => [
+            $number => $audit->assignees
+                ->filter(fn (User $user): bool => (int) $user->pivot->principle_number === $number)
+                ->pluck('name')
+                ->unique()
+                ->values(),
+        ]);
+        $leadAuditor = $audit->leadMember?->user;
+        $assignedAuditorNames = $audit->assignees
+            ->reject(fn (User $user): bool => $leadAuditor !== null && $user->is($leadAuditor))
+            ->pluck('name')
+            ->unique()
+            ->values()
+            ->join(', ');
 
         $pdf = Pdf::loadView('audits.pdf', [
             'audit' => $audit,
             'items' => $items,
             'isIspoChecklist' => $isIspoChecklist,
             'principles' => $principles,
+            'principleSummaries' => $principleSummaries,
+            'principleAuditors' => $principleAuditors,
+            'leadAuditor' => $leadAuditor,
+            'assignedAuditorNames' => $assignedAuditorNames,
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download('laporan-verifikasi-ispo-'.Str::slug($audit->company->name).'.pdf');
@@ -497,9 +720,10 @@ class AuditController extends Controller
         $section->addTextBreak(2);
         $section->addText('Status audit: '.($audit->status === 'completed' ? 'Selesai' : 'Belum selesai').'  ·  Dokumen dihasilkan otomatis dari sistem verifikasi audit ISPO pada '.now()->locale('id')->translatedFormat('d F Y H:i').'.', ['size' => 8, 'color' => '888888']);
 
-        $filePath = tempnam(sys_get_temp_dir(), 'audit-').'.docx';
-        IOFactory::createWriter($document, 'Word2007')->save($filePath);
-
-        return response()->download($filePath, 'laporan-audit-'.$audit->id.'.docx')->deleteFileAfterSend(true);
+        return response()->streamDownload(function () use ($document) {
+            IOFactory::createWriter($document, 'Word2007')->save('php://output');
+        }, 'laporan-audit-'.$audit->id.'.docx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ]);
     }
 }

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ProjectRole;
+use App\Models\AuditProjectMember;
 use App\Models\Company;
 use App\Models\User;
 use App\Support\IspoChecklist;
@@ -20,30 +22,29 @@ class AuditWorkflowTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'admin']));
     }
 
-    public function test_a_company_creation_copies_the_iso_checklist_into_the_new_audit(): void
+    public function test_company_creation_stores_company_master_data_and_redirects_to_companies_index(): void
     {
-        $canonical = IspoChecklist::items();
-
         $response = $this->post(route('companies.store'), [
             'name' => 'PT Test Verifikasi',
             'industry' => 'Manufaktur',
-            'due_date' => '2026-10-01',
+            'address' => 'Jl. Kebun Raya No. 10',
+            'contact_name' => 'Budi Santoso',
+            'contact_email' => 'budi@kebun.com',
+        ]);
+
+        $response->assertRedirect(route('companies.index'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('companies', [
+            'name' => 'PT Test Verifikasi',
+            'industry' => 'Manufaktur',
+            'address' => 'Jl. Kebun Raya No. 10',
+            'contact_name' => 'Budi Santoso',
+            'contact_email' => 'budi@kebun.com',
         ]);
 
         $company = Company::where('name', 'PT Test Verifikasi')->firstOrFail();
-        $audit = $company->audits()->firstOrFail();
-
-        $response->assertRedirect(route('audits.show', $audit));
-        $this->assertDatabaseHas('audits', ['company_id' => $company->id, 'status' => 'pending']);
-        $this->assertSame(count($canonical), $audit->items()->count());
-        $this->assertSame(
-            $canonical[0]['title'],
-            $audit->items()->orderBy('sort_order')->value('title'),
-        );
-        $this->get(route('audits.show', $audit))
-            ->assertOk()
-            ->assertSee('Prinsip verifikasi')
-            ->assertSee('Prinsip 2');
+        $this->assertSame(0, $company->audits()->count());
     }
 
     public function test_sync_command_unifies_legacy_audits_with_the_reference_checklist(): void
@@ -128,6 +129,7 @@ class AuditWorkflowTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
         $this->assertStringContainsString('laporan-verifikasi-ispo-', (string) $response->headers->get('content-disposition'));
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
     }
 
     public function test_audit_pdf_download_handles_the_full_ispo_checklist(): void
@@ -203,6 +205,14 @@ class AuditWorkflowTest extends TestCase
     {
         $company = Company::factory()->create();
         $audit = $company->audits()->create(['title' => 'Audit draft']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+        ]);
+        $this->actingAs($lead);
+
         $first = $audit->items()->create(['title' => '1.1.1 Izin lokasi', 'sort_order' => 1]);
         $second = $audit->items()->create(['title' => '2.1.1 Rencana strategis', 'sort_order' => 2]);
 
@@ -218,6 +228,14 @@ class AuditWorkflowTest extends TestCase
 
         $company = Company::factory()->create();
         $audit = $company->audits()->create(['title' => 'Audit hasil']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+        ]);
+        $this->actingAs($lead);
+
         $item = $audit->items()->create(['title' => '1.1.1 Izin lokasi', 'sort_order' => 1]);
 
         $this->post(route('audit-items.hasil.store', $item), [
@@ -237,6 +255,14 @@ class AuditWorkflowTest extends TestCase
     {
         $company = Company::factory()->create();
         $audit = $company->audits()->create(['title' => 'Audit hasil lanjutan']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+        ]);
+        $this->actingAs($lead);
+
         $item = $audit->items()->create(['title' => '1.1.1 Izin lokasi', 'sort_order' => 1]);
         $hasil = $item->hasils()->create(['content' => 'Awal', 'sort_order' => 0]);
 
@@ -268,5 +294,91 @@ class AuditWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Hasil audit lapangan lengkap.')
             ->assertSee('src="'.Storage::disk('public')->url('audit-evidence/bukti-1.jpg').'"', false);
+    }
+
+    public function test_report_contains_audit_identity_team_assignments_and_findings(): void
+    {
+        $company = Company::factory()->create([
+            'name' => 'PT Sawit Contoh',
+            'industry' => 'Perkebunan Kelapa Sawit',
+            'address' => 'Jalan Kebun No. 7',
+            'contact_name' => 'PIC Perusahaan',
+        ]);
+        $lead = User::factory()->create(['role' => 'auditor', 'name' => 'Lead Audit']);
+        $auditor = User::factory()->create(['role' => 'auditor', 'name' => 'Auditor Prinsip Satu']);
+        $audit = $company->audits()->create([
+            'title' => 'Surveillance 1',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-01-07',
+            'scope' => 'Standar ISPO - Kebun & PKS',
+        ]);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+            'added_by' => auth()->id(),
+        ]);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $auditor->id,
+            'project_role' => ProjectRole::Auditor->value,
+            'added_by' => auth()->id(),
+        ]);
+        $audit->assignees()->attach($auditor->id, ['principle_number' => 1]);
+        $auditItem = $audit->items()->create([
+            'title' => '1.1.1 Legalitas kebun',
+            'sort_order' => 1,
+            'status' => 'non_compliant',
+            'note' => 'Dokumen perlu diperbarui.',
+        ]);
+        $auditItem->hasils()->create([
+            'content' => 'Bukti hasil verifikasi.',
+            'sort_order' => 0,
+        ]);
+        $audit->findings()->create([
+            'note' => 'Temuan utama audit',
+            'recommendation' => 'Lengkapi dokumen pendukung.',
+        ]);
+
+        $this->actingAs($auditor)
+            ->get(route('audits.report', $audit))
+            ->assertOk()
+            ->assertSee('Unduh Laporan PDF')
+            ->assertSee('PT Sawit Contoh')
+            ->assertSee('Perkebunan Kelapa Sawit')
+            ->assertSee('Jalan Kebun No. 7')
+            ->assertSee('PIC Perusahaan')
+            ->assertSee('Surveillance 1')
+            ->assertSee('01 Januari 2026')
+            ->assertSee('07 Januari 2026')
+            ->assertSee('Standar ISPO - Kebun & PKS')
+            ->assertSee('Lead Audit')
+            ->assertSee('Auditor Prinsip Satu')
+            ->assertSee('Bukti hasil verifikasi.')
+            ->assertSee('Temuan utama audit')
+            ->assertSee('Dokumen perlu diperbarui.');
+    }
+
+    public function test_unassigned_auditor_cannot_view_another_projects_report_or_pdf(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit privat']);
+        $audit->items()->create([
+            'title' => '1.1.1 Indikator',
+            'sort_order' => 1,
+            'status' => 'compliant',
+        ]);
+        $outsider = User::factory()->create(['role' => 'auditor']);
+
+        $this->actingAs($outsider)
+            ->get(route('audits.report', $audit))
+            ->assertForbidden();
+
+        $this->get(route('audits.pdf', $audit))
+            ->assertForbidden();
+
+        $this->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertDontSee(route('audits.pdf', $audit), false);
     }
 }

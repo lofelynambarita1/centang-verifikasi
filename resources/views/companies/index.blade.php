@@ -19,7 +19,7 @@
 @endsection
 
 @section('content')
-    <p class="page-intro">Kelola perusahaan (auditee) yang akan diverifikasi dan pantau progresnya dari satu tempat.</p>
+    <p class="page-intro">Kelola master data perusahaan (auditee) dan riwayat auditnya.</p>
 
     <section class="panel panel--pad">
         <div class="table-wrap">
@@ -27,19 +27,14 @@
                 <thead>
                     <tr>
                         <th>Nama perusahaan</th>
-                        <th>Auditor / Tanggal</th>
-                        <th>Progres verifikasi</th>
+                        <th>Bidang usaha</th>
+                        <th>Kontak PIC</th>
+                        <th>Total riwayat audit</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
                 @forelse ($companies as $company)
-                    @php
-                        $audit = $company->audits->sortByDesc('created_at')->first();
-                        $totalItems = $audit?->items->count() ?? 0;
-                        $verifiedItems = $audit?->items->whereIn('status', ['compliant', 'non_compliant', 'not_applicable'])->count() ?? 0;
-                        $progress = $totalItems ? round($verifiedItems / $totalItems * 100) : 0;
-                    @endphp
                     <tr>
                         <td>
                             <div class="cell-company">
@@ -51,21 +46,16 @@
                             </div>
                         </td>
                         <td>
-                            <strong>{{ $audit?->auditorNamesText() ?: 'Belum ditentukan' }}</strong>
-                            <div class="cell-meta">{{ $audit?->due_date?->format('d F Y') ?: '-' }}</div>
+                            {{ $company->industry ?: 'Belum diisi' }}
                         </td>
                         <td>
-                            <div class="progress">
-                                <div class="progress__track">
-                                    <div class="progress__bar" style="width:{{ $progress }}%"></div>
-                                </div>
-                                <span class="progress__pct">{{ $progress }}%</span>
-                            </div>
-                            <div class="cell-meta">{{ $verifiedItems }}/{{ $totalItems }} indikator</div>
+                            <strong>{{ $company->contact_name ?: 'Belum diisi' }}</strong>
+                            <div class="cell-meta">{{ $company->contact_email ?: 'Email belum diisi' }}</div>
                         </td>
+                        <td>{{ $company->audits_count }}</td>
                         <td>
                             <div class="cell-actions">
-                                <a class="btn btn--ghost btn--sm" href="{{ $audit ? route('audits.show', $audit) : route('companies.show', $company) }}">Buka</a>
+                                <a class="btn btn--ghost btn--sm" href="{{ route('companies.show', $company) }}">Detail / Riwayat</a>
                                 <a class="btn btn--ghost btn--sm" href="{{ route('companies.edit', $company) }}">Edit</a>
                                 <form method="POST" action="{{ route('companies.destroy', $company) }}" onsubmit="return confirm('Hapus perusahaan ini beserta auditnya?')">
                                     @csrf
@@ -77,7 +67,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4">
+                        <td colspan="5">
                             <div class="empty">
                                 <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                     <path d="M22 12h-6l-2 3h-4l-2-3H2"/>

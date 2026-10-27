@@ -24,16 +24,18 @@
         <a class="btn btn--outline" href="{{ route('companies.index') }}">Perusahaan</a>
         <a class="btn btn--outline" href="{{ route('companies.edit', $audit->company) }}">Edit data</a>
 
-        <div class="menu-split" data-menu>
-            <button class="btn btn--outline menu-split__trigger menu-split__trigger--plain" type="button" aria-expanded="false" aria-controls="audit-export-menu">
-                Cetak laporan
-            </button>
-            <div class="menu-split__panel" id="audit-export-menu" role="menu" aria-label="Export laporan">
-                <a class="menu-split__item" href="{{ route('audits.report', $audit) }}" role="menuitem">Cetak laporan</a>
-                <a class="menu-split__item" href="{{ route('audits.download', $audit) }}" role="menuitem">Download Word</a>
-                <a class="menu-split__item menu-split__item--primary" href="{{ route('audits.pdf', $audit) }}" role="menuitem">Download PDF</a>
+        @if ($canDownloadReport)
+            <div class="menu-split" data-menu>
+                <button class="btn btn--outline menu-split__trigger menu-split__trigger--plain" type="button" aria-expanded="false" aria-controls="audit-export-menu">
+                    Cetak laporan
+                </button>
+                <div class="menu-split__panel" id="audit-export-menu" role="menu" aria-label="Export laporan">
+                    <a class="menu-split__item" href="{{ route('audits.report', $audit) }}" role="menuitem">Cetak laporan</a>
+                    <a class="menu-split__item" href="{{ route('audits.download', $audit) }}" role="menuitem">Download Word</a>
+                    <a class="menu-split__item menu-split__item--primary" href="{{ route('audits.pdf', $audit) }}" role="menuitem">Unduh Laporan PDF</a>
+                </div>
             </div>
-        </div>
+        @endif
     </div>
 @endsection
 
@@ -319,10 +321,12 @@
                 <span class="draft-note">Status audit: <b>{{ $audit->status === 'completed' ? 'Selesai' : 'Draft' }}</b> · data tersimpan otomatis setiap kali Anda menekan Simpan.</span>
             </div>
             <div class="completion-actions">
-                @if ($verifiedItems === $totalItems && $totalItems > 0)
-                    <a class="btn btn--primary" href="{{ route('audits.pdf', $audit) }}">Download 1 file lengkap (PDF)</a>
-                @else
-                    <span class="draft-note">Lengkapi semua indikator untuk mengunduh seluruh prinsip dalam 1 file.</span>
+                @if ($canDownloadReport)
+                    @if ($verifiedItems === $totalItems && $totalItems > 0)
+                        <a class="btn btn--primary" href="{{ route('audits.pdf', $audit) }}">Unduh Laporan PDF</a>
+                    @else
+                        <span class="draft-note">Lengkapi semua indikator untuk mengunduh seluruh prinsip dalam 1 file.</span>
+                    @endif
                 @endif
                 <form method="POST" action="{{ route('audits.complete', $audit) }}">
                     @csrf

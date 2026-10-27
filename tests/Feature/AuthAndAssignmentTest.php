@@ -23,24 +23,26 @@ class AuthAndAssignmentTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
-    public function test_public_registration_requests_a_role_and_waits_for_admin_approval(): void
+    public function test_login_page_does_not_contain_registration_link(): void
     {
         $this->get(route('login'))
             ->assertOk()
-            ->assertSee('Belum punya akun?')
-            ->assertSee(route('register'));
+            ->assertDontSee('Belum punya akun?')
+            ->assertDontSee('Daftar akun');
+    }
 
-        $this->post(route('register.store'), [
+    public function test_registration_routes_are_disabled(): void
+    {
+        $this->get('/register')->assertNotFound();
+        $this->post('/register')->assertNotFound();
+    }
+
+    public function test_admin_can_approve_requested_role_for_preexisting_user(): void
+    {
+        $user = User::factory()->create([
             'name' => 'Auditor Baru',
             'email' => 'auditor.baru@example.com',
             'password' => 'password123',
-            'password_confirmation' => 'password123',
-            'role' => 'admin',
-        ])->assertRedirect(route('login'));
-
-        $this->assertDatabaseHas('users', [
-            'name' => 'Auditor Baru',
-            'email' => 'auditor.baru@example.com',
             'role' => 'auditor',
             'requested_role' => 'admin',
         ]);
@@ -60,7 +62,7 @@ class AuthAndAssignmentTest extends TestCase
             ->assertSee('<strong>Admin</strong>', false)
             ->assertSee('Setujui role');
 
-        $this->post(route('users.approve-role', User::where('email', 'auditor.baru@example.com')->firstOrFail()))
+        $this->post(route('users.approve-role', $user))
             ->assertRedirect(route('users.index'));
 
         $this->assertDatabaseHas('users', [
@@ -73,16 +75,6 @@ class AuthAndAssignmentTest extends TestCase
             'email' => 'auditor.baru@example.com',
             'password' => 'password123',
         ])->assertRedirect(route('dashboard'));
-    }
-
-    public function test_registration_page_explains_the_available_role(): void
-    {
-        $this->get(route('register'))
-            ->assertOk()
-            ->assertSee('Ajukan akun')
-            ->assertSee('Lead Auditor')
-            ->assertSee('Admin')
-            ->assertSee('Persetujuan Admin diperlukan.');
     }
 
     public function test_non_admin_cannot_approve_a_requested_role(): void
@@ -100,23 +92,25 @@ class AuthAndAssignmentTest extends TestCase
         ]);
     }
 
-    public function test_lead_can_assign_multiple_auditors_to_one_principle(): void
+    public function test_lead_can_assign_one_auditor_to_multiple_principles(): void
     {
         $lead = User::factory()->create(['role' => 'lead_audit']);
         $auditorOne = User::factory()->create(['role' => 'auditor']);
-        $auditorTwo = User::factory()->create(['role' => 'auditor']);
         $audit = Company::factory()->create()->audits()->create(['title' => 'Audit assignment']);
 
         $this->actingAs($lead)->put(route('audits.assignments.update', $audit), [
+            'lead_auditor_id' => $lead->id,
+            'team_members_present' => '1',
+            'team_members' => [$auditorOne->id],
             'assignments' => [
-                ['principle' => 1, 'users' => [$auditorOne->id, $auditorTwo->id]],
-                ['principle' => 2, 'users' => [$auditorOne->id]],
+                ['principle' => 1, 'user_id' => $auditorOne->id],
+                ['principle' => 2, 'user_id' => $auditorOne->id],
             ],
         ])->assertRedirect();
 
         $this->assertDatabaseHas('audit_principle_user', ['audit_id' => $audit->id, 'user_id' => $auditorOne->id, 'principle_number' => 1]);
-        $this->assertDatabaseHas('audit_principle_user', ['audit_id' => $audit->id, 'user_id' => $auditorTwo->id, 'principle_number' => 1]);
-        $this->assertSame(3, $audit->assignees()->count());
+        $this->assertDatabaseHas('audit_principle_user', ['audit_id' => $audit->id, 'user_id' => $auditorOne->id, 'principle_number' => 2]);
+        $this->assertSame(2, $audit->assignees()->count());
     }
 
     public function test_admin_can_open_the_auditor_assignment_menu(): void

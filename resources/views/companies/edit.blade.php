@@ -5,7 +5,7 @@
 @section('heading', 'Edit data perusahaan')
 
 @section('content')
-    <p class="page-intro">Perbarui data perusahaan. Perubahan langsung tersimpan pada semua audit yang terkait.</p>
+    <p class="page-intro">Perbarui data profil dan kontak master perusahaan di bawah ini.</p>
 
     <section class="panel panel--pad form-card">
         <form class="form" method="POST" action="{{ route('companies.update', $company) }}">
@@ -13,8 +13,8 @@
             @method('PUT')
             @include('companies._form', ['company' => $company])
             <div class="form-actions">
-                <a class="btn btn--ghost" href="{{ route('companies.show', $company) }}">Kembali</a>
-                <button class="btn btn--primary form-submit" type="submit">Simpan perubahan</button>
+                <a class="btn btn--ghost" href="{{ route('companies.index') }}">Kembali</a>
+                <button class="btn btn--primary form-submit" type="submit">Simpan Perusahaan</button>
             </div>
         </form>
     </section>

@@ -42,26 +42,20 @@ class AuditNotificationsTest extends TestCase
         $this->assertNotNull($notification->fresh()->read_at);
     }
 
-    public function test_role_request_notifies_active_admins_via_database_and_mail(): void
+    public function test_role_approval_notifies_user_via_database_and_mail(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $lead = User::factory()->create(['role' => 'lead_audit']);
+        $user = User::factory()->create(['role' => 'auditor', 'requested_role' => 'lead_audit']);
         Notification::fake();
 
-        $this->post(route('register.store'), [
-            'name' => 'Pemohon Role',
-            'email' => 'pemohon@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
-            'role' => 'lead_audit',
-        ])->assertRedirect(route('login'));
+        $this->actingAs($admin)->post(route('users.approve-role', $user))
+            ->assertRedirect(route('users.index'));
 
-        Notification::assertSentTo($admin, AuditSystemNotification::class, function (AuditSystemNotification $notification, array $channels): bool {
-            return $notification->event === 'role_request'
+        Notification::assertSentTo($user, AuditSystemNotification::class, function (AuditSystemNotification $notification, array $channels): bool {
+            return $notification->event === 'role_approved'
                 && in_array('database', $channels, true)
                 && in_array('mail', $channels, true);
         });
-        Notification::assertNotSentTo($lead, AuditSystemNotification::class);
     }
 
     public function test_new_principle_assignments_notify_only_new_assignees(): void
@@ -72,9 +66,12 @@ class AuditNotificationsTest extends TestCase
         Notification::fake();
 
         $this->actingAs($lead)->put(route('audits.assignments.update', $audit), [
+            'lead_auditor_id' => $lead->id,
+            'team_members_present' => '1',
+            'team_members' => [$auditor->id],
             'assignments' => [
-                ['principle' => 1, 'users' => [$auditor->id]],
-                ['principle' => 2, 'users' => [$auditor->id]],
+                ['principle' => 1, 'user_id' => $auditor->id],
+                ['principle' => 2, 'user_id' => $auditor->id],
             ],
         ])->assertRedirect();
 

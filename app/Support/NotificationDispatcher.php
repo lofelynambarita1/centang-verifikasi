@@ -2,8 +2,8 @@
 
 namespace App\Support;
 
-use App\Notifications\AuditSystemNotification;
 use App\Models\User;
+use App\Notifications\AuditSystemNotification;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class NotificationDispatcher
