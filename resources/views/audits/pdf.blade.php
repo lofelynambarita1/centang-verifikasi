@@ -2,24 +2,19 @@
 <html lang="id">
 <head>
     <meta charset="utf-8">
-    <title>Laporan Verifikasi Hasil ISPO | {{ $audit->company->name ?? '-' }}</title>
+    <title>Laporan Verifikasi Hasil ISPO | {{ $audit->company->name }}</title>
     <style>
         @page { size: A4 portrait; margin: 16mm 15mm 18mm; }
         * { box-sizing: border-box; }
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 10px; color: #111; line-height: 1.5; margin: 0; }
-        .form-code { text-align: right; font-size: 9px; color: #444; margin: 0 0 6px; }
-        .kop-container { border-bottom: 3px solid #1b2450; padding-bottom: 6px; margin-bottom: 14px; text-align: center; }
-        .kop-image { width: 100%; max-height: 70px; display: block; margin: 0 auto; }
-        
-        /* Fallback Kop Teks jika gambar tidak ditemukan */
-        .brand-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+        .form-code { text-align: right; font-size: 9px; color: #444; margin: 0 0 8px; }
+        .brand-table { width: 100%; border-collapse: collapse; }
         .brand-table td { border-bottom: 3px solid #29346c; padding-bottom: 8px; vertical-align: middle; }
         .gis-mark { width: 44px; }
         .gis-circle { display: inline-block; width: 34px; height: 34px; border: 2px solid #1b2450; border-radius: 50%; text-align: center; line-height: 30px; font-weight: bold; font-size: 13px; color: #1b2450; }
         .brand-name { font-size: 15px; font-weight: bold; color: #29346c; text-transform: uppercase; letter-spacing: .02em; }
         .brand-sub { font-size: 10px; color: #666; font-style: italic; }
-
-        h1.title { text-align: center; font-size: 14px; margin: 14px 0 2px; }
+        h1.title { text-align: center; font-size: 14px; margin: 18px 0 2px; }
         .auditee { text-align: center; font-size: 11px; font-weight: bold; text-transform: uppercase; margin: 0 0 16px; }
         table.facts { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
         table.facts td { padding: 1px 4px; vertical-align: top; }
@@ -56,22 +51,6 @@
 </head>
 <body>
     @php
-        // Load logo dari public_path dan konversi ke base64 agar aman di DomPDF
-        $logoCandidates = [
-            public_path('images/logo-gis-kop.jpg'),
-            public_path('images/logo-gis-kop.jpg'),
-            public_path('images/Picture1.jpg'),
-            public_path('Picture1.jpg')
-        ];
-        $logoBase64 = null;
-        foreach ($logoCandidates as $cand) {
-            if (file_exists($cand)) {
-                $ext = pathinfo($cand, PATHINFO_EXTENSION);
-                $logoBase64 = 'data:image/' . ($ext === 'jpg' ? 'jpeg' : $ext) . ';base64,' . base64_encode(file_get_contents($cand));
-                break;
-            }
-        }
-
         $items = ($items ?? $audit->items)->sortBy('sort_order')->values();
         $totalItems = $items->count();
         $compliant = $items->where('status', 'compliant')->count();
@@ -86,40 +65,22 @@
         ];
         $principleTitles = config('ispo.principles', []);
         $criteriaMap = config('ispo.criteria', []);
-        
-        $groups = isset($principles) && $principles->isNotEmpty()
+        $groups = $isIspoChecklist
             ? $principles->map(fn ($group) => $group->sortBy('sort_order')->values())
-            : ($items->groupBy(function($item) {
-                preg_match('/^(\d+)\./', $item->title, $m);
-                return $m[1] ?? '1';
-            }));
-
-        $leadAuditorName = $audit->leadMember?->user?->name 
-            ?? $audit->auditor_name 
-            ?? 'Lead Auditor';
-        $auditDateStr = $audit->start_date && $audit->end_date 
-            ? ($audit->start_date->translatedFormat('d M Y') . ' - ' . $audit->end_date->translatedFormat('d M Y'))
-            : ($audit->due_date?->translatedFormat('d F Y') ?: '-');
+            : collect([0 => $items]);
     @endphp
 
     <div class="form-code">FrO. 8603/GIS-1.1</div>
 
-    {{-- KOP SURAT LOGO RESMI --}}
-    @if ($logoBase64)
-        <div class="kop-container">
-            <img src="{{ $logoBase64 }}" class="kop-image" alt="PT. GLOBAL INSPEKSI SERTIFIKASI">
-        </div>
-    @else
-        <table class="brand-table">
-            <tr>
-                <td class="gis-mark"><span class="gis-circle">GIS</span></td>
-                <td>
-                    <div class="brand-name">PT. GLOBAL INSPEKSI SERTIFIKASI</div>
-                    <div class="brand-sub">Inspection &amp; Certification Body</div>
-                </td>
-            </tr>
-        </table>
-    @endif
+    <table class="brand-table">
+        <tr>
+            <td class="gis-mark"><span class="gis-circle">GIS</span></td>
+            <td>
+                <div class="brand-name">PT. GLOBAL INSPEKSI SERTIFIKASI</div>
+                <div class="brand-sub">Inspection &amp; Certification Body</div>
+            </td>
+        </tr>
+    </table>
 
     <h1 class="title">LAPORAN VERIFIKASI HASIL ISPO</h1>
     <div class="auditee">(AUDITEE / {{ strtoupper($audit->company->name ?: 'NAMA KLIEN') }})</div>
@@ -127,14 +88,14 @@
     <table class="facts">
         <tr><td class="k">Nama Perusahaan</td><td class="s">:</td><td>{{ $audit->company->name ?: '-' }}</td></tr>
         <tr><td class="k">Alamat Perusahaan</td><td class="s">:</td><td>{{ $audit->company->address ?: '-' }}</td></tr>
-        <tr><td class="k">Ruang Lingkup / Judul</td><td class="s">:</td><td>{{ $audit->scope ?? 'Standar ISPO' }} ({{ $audit->title }})</td></tr>
-        <tr><td class="k">Auditor / Lead Auditor</td><td class="s">:</td><td>{{ $leadAuditorName }}</td></tr>
-        <tr><td class="k">Tanggal Audit</td><td class="s">:</td><td>{{ $auditDateStr }}</td></tr>
+        <tr><td class="k">Luasan Lahan</td><td class="s">:</td><td>-</td></tr>
+        <tr><td class="k">Auditor</td><td class="s">:</td><td>{{ $audit->auditor_name ?: '-' }}</td></tr>
+        <tr><td class="k">Tanggal Audit</td><td class="s">:</td><td>{{ $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-' }}</td></tr>
     </table>
 
     <h2 class="section">I. HASIL PENILAIAN</h2>
     <p><strong>RINGKASAN PENILAIAN</strong></p>
-    <p>Dalam kegiatan penilaian/ audit ISPO ini ditemukan beberapa ketidaksesuaian yang terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan kemudian saat ini pihak {{ $audit->company->name ?: 'perusahaan' }} telah melakukan tindakan perbaikan untuk pemenuhan ketidaksesuaian tersebut seluruhnya.</p>
+    <p>Dalam kegiatan penilaian/ audit ISPO Tahap 2 ini ditemukan beberapa ketidaksesuaian yang terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan kemudian saat ini pihak {{ $audit->company->name ?: 'perusahaan' }} telah melakukan tindakan perbaikan untuk pemenuhan ketidaksesuaian tersebut seluruhnya.</p>
     <p>Berikut ini merupakan ringkasan dari hasil penilaian yang dibuat berdasarkan Prinsip, Kriteria dan indikator ISPO seperti yang ditetapkan dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit.</p>
 
     <table class="summary">
@@ -165,7 +126,7 @@
             @continue
         @endif
 
-        <h2 class="principle">Prinsip {{ $number }}. {{ $principleTitles[$number] ?? '' }}</h2>
+        <h2 class="principle">{{ $number }}. {{ $principleTitles[$number] ?? '' }}</h2>
 
         @php $previousCriteria = null; @endphp
 
@@ -230,12 +191,12 @@
         <tr>
             <td>
                 <div class="sign-line"></div>
-                <div class="sign-label">{{ $leadAuditorName }}</div>
-                <div class="sign-role">Lead Auditor</div>
+                <div class="sign-label">{{ $audit->auditor_name ?: '(Nama Auditor)' }}</div>
+                <div class="sign-role">Auditor</div>
             </td>
             <td>
                 <div class="sign-line"></div>
-                <div class="sign-label">{{ $audit->company->pic_name ?? '(Nama Pimpinan Perusahaan)' }}</div>
+                <div class="sign-label">(Nama Pimpinan Perusahaan)</div>
                 <div class="sign-role">{{ $audit->company->name ?: 'Pimpinan Perusahaan' }}</div>
             </td>
         </tr>
