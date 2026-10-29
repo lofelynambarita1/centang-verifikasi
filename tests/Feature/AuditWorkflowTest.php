@@ -439,6 +439,8 @@ class AuditWorkflowTest extends TestCase
         $this->assertDatabaseHas('audit_items', ['id' => $item->id, 'status' => 'non_compliant']);
         $this->get(route('audits.show', $audit))
             ->assertSee('checklist-item--non-compliant', false)
+            ->assertSee('class="tab active tab--non-compliant"', false)
+            ->assertSee('terdapat indikator tidak memenuhi')
             ->assertSee('Tidak memenuhi · Perlu tindak lanjut.')
             ->assertSee('status-form--non-compliant', false);
 
@@ -448,7 +450,32 @@ class AuditWorkflowTest extends TestCase
         $this->assertDatabaseHas('audit_items', ['id' => $item->id, 'status' => 'compliant']);
         $this->get(route('audits.show', $audit))
             ->assertDontSee('checklist-item--non-compliant', false)
+            ->assertDontSee('tab--non-compliant', false)
             ->assertDontSee('status-form--non-compliant', false);
+    }
+
+    public function test_non_compliant_indicator_marks_only_its_principle_tab(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit tab prinsip']);
+        $audit->items()->create([
+            'title' => '1.1.1 Izin lokasi',
+            'sort_order' => 1,
+            'status' => 'compliant',
+        ]);
+        $audit->items()->create([
+            'title' => '2.1.1 Rencana strategis',
+            'sort_order' => 2,
+            'status' => 'non_compliant',
+        ]);
+
+        $response = $this->get(route('audits.show', $audit));
+
+        $response
+            ->assertOk()
+            ->assertSee('aria-label="Prinsip 2 · 1 indikator, terdapat indikator tidak memenuhi"', false)
+            ->assertSee('tab--non-compliant', false);
+        $this->assertSame(1, substr_count((string) $response->getContent(), 'tab--non-compliant'));
     }
 
     public function test_report_shows_every_hasil_audit_entry_and_evidence(): void

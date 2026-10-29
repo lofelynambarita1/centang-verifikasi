@@ -139,7 +139,19 @@
     <div class="tabs" role="navigation" aria-label="Pilih prinsip">
         @if ($isIspoChecklist)
             @foreach ($principles as $principleNumber => $principleItems)
-                <a class="tab {{ $currentPage === $principleNumber ? 'active' : '' }}" href="{{ route('audits.show', ['audit' => $audit, 'page' => $principleNumber]) }}">Prinsip {{ $principleNumber }} · {{ $principleItems->count() }}</a>
+                @php
+                    $hasNonCompliantItems = $principleItems->contains(fn ($item): bool => $item->status === 'non_compliant');
+                @endphp
+                <a
+                    class="tab {{ $currentPage === $principleNumber ? 'active' : '' }} {{ $hasNonCompliantItems ? 'tab--non-compliant' : '' }}"
+                    href="{{ route('audits.show', ['audit' => $audit, 'page' => $principleNumber]) }}"
+                    aria-label="Prinsip {{ $principleNumber }} · {{ $principleItems->count() }} indikator{{ $hasNonCompliantItems ? ', terdapat indikator tidak memenuhi' : '' }}"
+                >
+                    Prinsip {{ $principleNumber }} · {{ $principleItems->count() }}
+                    @if ($hasNonCompliantItems)
+                        <span class="tab__warning" aria-hidden="true">!</span>
+                    @endif
+                </a>
             @endforeach
         @else
             @foreach ($statusTabs as $index => $tab)

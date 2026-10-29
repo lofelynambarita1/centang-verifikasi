@@ -1414,6 +1414,29 @@ img, svg { vertical-align: middle; }
 }
 .tab:hover { border-color: var(--primary); color: var(--primary); }
 .tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.tab--non-compliant {
+    border-color: #c62828;
+    background: #fff0ef;
+    color: #a61b1b;
+    font-weight: 800;
+}
+.tab--non-compliant:hover { border-color: #b71c1c; background: #ffe3e1; color: #8f1717; }
+.tab.active.tab--non-compliant,
+.tab.active.tab--non-compliant:hover { border-color: #c62828; background: #c62828; color: #fff; }
+.tab__warning {
+    display: inline-flex;
+    width: 17px;
+    height: 17px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #c62828;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+}
+.tab.active.tab--non-compliant .tab__warning { background: #fff; color: #c62828; }
 
 .checklist-block {
     background: linear-gradient(145deg, #e7effb 0%, #f1f5fc 58%, #e5edf9 100%);
