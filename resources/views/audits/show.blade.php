@@ -182,6 +182,7 @@
                 $criteriaInfo = $criteriaCode ? ($criteriaMap[$criteriaCode] ?? null) : null;
                 $statusLabel = $item->status === 'compliant' ? 'Memenuhi' : ($item->status === 'non_compliant' ? 'Tidak memenuhi' : ($item->status === 'not_applicable' ? 'NA' : 'Belum diperiksa'));
                 $statusClass = $item->status === 'compliant' ? 'chip--done' : ($item->status === 'non_compliant' ? 'chip--red' : ($item->status === 'not_applicable' ? 'chip--todo' : 'chip--todo'));
+                $canUpdateChecklist = auth()->user()?->canUpdateChecklist($item) ?? false;
             @endphp
 
             @if ($criteriaInfo && $criteriaCode !== $previousCriteria)
@@ -273,22 +274,31 @@
                     </div>
                 </div>
 
-                <form method="POST" action="{{ route('audit-items.update', $item) }}" class="item-status-form">
-                    @csrf
-                    @method('PUT')
-                    <input type="hidden" name="page" value="{{ $currentPage }}">
-                    <div class="status-form">
-                        <label for="status-{{ $item->id }}">Status indikator:</label>
-                        <span class="chip {{ $statusClass }}">{{ $statusLabel }}</span>
-                        <select id="status-{{ $item->id }}" name="status">
-                            <option value="pending" @selected($item->status === 'pending')>Belum diperiksa</option>
-                            <option value="compliant" @selected($item->status === 'compliant')>Memenuhi</option>
-                            <option value="non_compliant" @selected($item->status === 'non_compliant')>Tidak memenuhi</option>
-                            <option value="not_applicable" @selected($item->status === 'not_applicable')>NA</option>
-                        </select>
-                        <button class="save-btn" type="submit">Simpan</button>
-                    </div>
-                </form>
+                <div class="item-status-form">
+                    @if ($canUpdateChecklist)
+                        <form method="POST" action="{{ route('audit-items.update', $item) }}">
+                            @csrf
+                            @method('PUT')
+                            <input type="hidden" name="page" value="{{ $currentPage }}">
+                            <div class="status-form">
+                                <label for="status-{{ $item->id }}">Status indikator:</label>
+                                <span class="chip {{ $statusClass }}">{{ $statusLabel }}</span>
+                                <select id="status-{{ $item->id }}" name="status" required>
+                                    <option value="" disabled hidden @selected($item->status === 'pending')>Pilih status</option>
+                                    <option value="compliant" @selected($item->status === 'compliant')>Memenuhi</option>
+                                    <option value="non_compliant" @selected($item->status === 'non_compliant')>Tidak memenuhi</option>
+                                    <option value="not_applicable" @selected($item->status === 'not_applicable')>NA</option>
+                                </select>
+                                <button class="save-btn" type="submit">Simpan</button>
+                            </div>
+                        </form>
+                    @else
+                        <div class="status-form status-form--readonly">
+                            <label>Status indikator:</label>
+                            <span class="chip {{ $statusClass }}">{{ $statusLabel }}</span>
+                        </div>
+                    @endif
+                </div>
             </article>
         @empty
             <div class="empty">Belum ada prinsip verifikasi untuk audit ini.</div>

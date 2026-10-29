@@ -189,7 +189,7 @@ class RoleAndDefaultUserTest extends TestCase
         $this->post(route('audits.complete', $audit))->assertRedirect(route('login'));
     }
 
-    public function test_admin_cannot_update_checklist_verification(): void
+    public function test_admin_can_update_checklist_verification(): void
     {
         $company = Company::factory()->create();
         $audit = $company->audits()->create(['title' => 'Audit Checklist']);
@@ -197,10 +197,48 @@ class RoleAndDefaultUserTest extends TestCase
 
         $admin = User::factory()->create(['role' => 'admin']);
 
-        // Admin dilarang mencentang / mengisi checklist verifikasi
         $this->actingAs($admin)
+            ->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertSee('Belum diperiksa')
+            ->assertSee('<option value="compliant"', false)
+            ->assertSee('<option value="non_compliant"', false)
+            ->assertSee('<option value="not_applicable"', false)
+            ->assertDontSee('<option value="pending"', false);
+
+        $this->put(route('audit-items.update', $item), ['status' => 'compliant'])
+            ->assertRedirect(route('audits.show', ['audit' => $audit, 'page' => 1]));
+
+        $this->assertDatabaseHas('audit_items', [
+            'id' => $item->id,
+            'status' => 'compliant',
+        ]);
+    }
+
+    public function test_pending_cannot_be_submitted_as_an_indicator_status(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit status indikator']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+        ]);
+        $item = $audit->items()->create(['title' => '1.1.1 Legalitas Usaha', 'sort_order' => 1]);
+
+        $this->actingAs($lead)
+            ->from(route('audits.show', $audit))
             ->put(route('audit-items.update', $item), ['status' => 'compliant'])
-            ->assertForbidden();
+            ->assertRedirect(route('audits.show', ['audit' => $audit, 'page' => 1]));
+
+        $this->put(route('audit-items.update', $item), ['status' => 'pending'])
+            ->assertSessionHasErrors('status');
+
+        $this->assertDatabaseHas('audit_items', [
+            'id' => $item->id,
+            'status' => 'compliant',
+        ]);
     }
 
     public function test_verification_and_completion_authorization_based_on_audit_project_member(): void
@@ -238,11 +276,11 @@ class RoleAndDefaultUserTest extends TestCase
         $this->assertFalse($outsider->isLeadAuditor($audit));
         $this->assertFalse($admin->isLeadAuditor($audit));
 
-        // 2. Checklist verification rights (canWorkOn / updateItem)
-        // Admin dilarang mengisi checklist
+        // 2. Checklist verification rights (canUpdateChecklist / updateItem)
+        // Admin dapat mengubah status checklist.
         $this->actingAs($admin)
             ->put(route('audit-items.update', $item1), ['status' => 'compliant'])
-            ->assertForbidden();
+            ->assertRedirect();
 
         // Lead auditor proyek berhak mengisi checklist
         $this->actingAs($lead)
@@ -261,6 +299,11 @@ class RoleAndDefaultUserTest extends TestCase
             ->assertForbidden();
 
         // Auditor luar (bukan anggota) dilarang mengisi checklist
+        $this->actingAs($outsider)
+            ->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertDontSee('name="status"', false);
+
         $this->actingAs($outsider)
             ->put(route('audit-items.update', $item1), ['status' => 'compliant'])
             ->assertForbidden();

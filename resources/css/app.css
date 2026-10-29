@@ -1358,6 +1358,7 @@ img, svg { vertical-align: middle; }
     flex-wrap: wrap;
 }
 .status-form label { font-size: 14px; font-weight: 700; color: var(--text); }
+.status-form--readonly { color: var(--muted); }
 .status-form select {
     min-height: 42px;
     border: 1px solid var(--border-strong);
@@ -1366,7 +1367,8 @@ img, svg { vertical-align: middle; }
     color: var(--text);
     padding: 0 12px;
     font-size: 14px;
-    min-width: 210px;
+    min-width: 255px;
+    cursor: pointer;
 }
 .status-form select:focus { outline: 3px solid rgba(49, 76, 154, .18); border-color: var(--primary); }
 

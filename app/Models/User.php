@@ -108,7 +108,6 @@ class User extends Authenticatable
 
     public function canWorkOn(AuditItem $auditItem): bool
     {
-        // Admin bertugas membuat proyek audit & menugaskan tim; Admin TIDAK mencentang checklist verifikasi
         if ($this->isAdmin()) {
             return false;
         }
@@ -125,6 +124,11 @@ class User extends Authenticatable
             ->where('audits.id', $auditItem->audit_id)
             ->wherePivot('principle_number', $auditItem->principleNumber())
             ->exists();
+    }
+
+    public function canUpdateChecklist(AuditItem $auditItem): bool
+    {
+        return $this->isAdmin() || $this->canWorkOn($auditItem);
     }
 
     /**

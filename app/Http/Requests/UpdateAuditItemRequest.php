@@ -12,7 +12,7 @@ class UpdateAuditItemRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->canWorkOn($this->route('auditItem')) ?? false;
+        return $this->user()?->canUpdateChecklist($this->route('auditItem')) ?? false;
     }
 
     /**
@@ -23,7 +23,7 @@ class UpdateAuditItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', 'in:pending,compliant,non_compliant,not_applicable'],
+            'status' => ['required', 'in:compliant,non_compliant,not_applicable'],
             'note' => ['nullable', 'string', 'max:5000'],
         ];
     }

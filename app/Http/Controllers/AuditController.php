@@ -308,7 +308,7 @@ class AuditController extends Controller
         AuditItem $auditItem,
         NotificationDispatcher $notifications,
     ): RedirectResponse {
-        abort_unless($request->user()?->canWorkOn($auditItem), 403);
+        abort_unless($request->user()?->canUpdateChecklist($auditItem), 403);
 
         $previousStatus = $auditItem->status;
         $validated = $request->validated();
