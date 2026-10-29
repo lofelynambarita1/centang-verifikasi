@@ -75,7 +75,7 @@
         </div>
     </aside>
 
-    <div class="app-main">
+    <div class="app-main @yield('page-class')">
         <header class="app-topbar">
             <div>
                 <p class="app-eyebrow">@yield('eyebrow', 'VERIFIKASI AUDIT ISPO')</p>
