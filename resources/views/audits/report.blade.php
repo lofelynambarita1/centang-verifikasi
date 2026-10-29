@@ -16,6 +16,11 @@
         $verified = $compliant + $nonCompliant + $notApplicable;
         $principleTitles = config('ispo.principles', []);
         $criteriaMap = config('ispo.criteria', []);
+        $logoPath = public_path('images/logo-gis-kop.jpg');
+        $logoContents = is_file($logoPath) ? file_get_contents($logoPath) : false;
+        $logoDataUri = $logoContents !== false
+            ? 'data:image/jpeg;base64,'.base64_encode($logoContents)
+            : null;
         $statusLabels = [
             'compliant' => 'Memenuhi',
             'non_compliant' => 'Tidak Memenuhi',
@@ -24,6 +29,9 @@
         ];
         $groups = $items->groupBy(fn ($item) => (int) $item->title)->filter(fn ($group) => $group->isNotEmpty());
         $leadAuditor = $audit->leadMember?->user;
+        $auditDate = $audit->start_date && $audit->end_date
+            ? $audit->start_date->locale('id')->translatedFormat('d F Y').' – '.$audit->end_date->locale('id')->translatedFormat('d F Y')
+            : ($audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-');
         $principleAuditors = collect(range(1, 7))->mapWithKeys(fn (int $number) => [
             $number => $audit->assignees
                 ->filter(fn ($user) => (int) $user->pivot->principle_number === $number)
@@ -35,18 +43,26 @@
 
     <main class="ispo-report">
         <div class="page-actions" style="margin-bottom: 1rem;">
-            <a class="btn btn--primary" href="{{ route('audits.pdf', $audit) }}">Unduh Laporan PDF</a>
+            <a class="btn btn--outline" href="{{ route('audits.pdf', $audit) }}" target="_blank" rel="noopener noreferrer">Preview PDF</a>
+            <a class="btn btn--primary" href="{{ route('audits.pdf', ['audit' => $audit, 'download' => 1]) }}">Unduh Laporan PDF</a>
         </div>
-        <header class="ispo-report-header">
-            <div class="gis-logo" aria-label="GIS">
-                <span>GIS</span>
-            </div>
-            <div class="gis-heading">
-                <h1>PT. GLOBAL INSPEKSI SERTIFIKASI</h1>
-                <p>Inspection &amp; Certification Body</p>
-            </div>
-            <div class="report-form-code">FrO. 8603/GIS-1.1</div>
-        </header>
+        @if ($logoDataUri)
+            <header class="ispo-report-header ispo-report-header--letterhead">
+                <div class="report-form-code">FrO. 8603/GIS-1.1</div>
+                <img class="report-letterhead-image" src="{{ $logoDataUri }}" alt="Kop PT. Global Inspeksi Sertifikasi">
+            </header>
+        @else
+            <header class="ispo-report-header">
+                <div class="gis-logo" aria-label="GIS">
+                    <span>GIS</span>
+                </div>
+                <div class="gis-heading">
+                    <h1>PT. GLOBAL INSPEKSI SERTIFIKASI</h1>
+                    <p>Inspection &amp; Certification Body</p>
+                </div>
+                <div class="report-form-code">FrO. 8603/GIS-1.1</div>
+            </header>
+        @endif
 
         <section class="ispo-report-cover">
             <h2>LAPORAN VERIFIKASI HASIL ISPO</h2>
@@ -55,12 +71,9 @@
             <div class="report-facts">
                 <div><span>Nama Perusahaan</span><b>:</b><strong>{{ $audit->company->name ?: '-' }}</strong></div>
                 <div><span>Alamat Perusahaan</span><b>:</b><strong>{{ $audit->company->address ?: '-' }}</strong></div>
-                <div><span>Bidang Usaha</span><b>:</b><strong>{{ $audit->company->industry ?: '-' }}</strong></div>
-                <div><span>PIC Perusahaan</span><b>:</b><strong>{{ $audit->company->contact_name ?: '-' }}</strong></div>
-                <div><span>Judul / Jenis Audit</span><b>:</b><strong>{{ $audit->title ?: '-' }}</strong></div>
-                <div><span>Tanggal Pelaksanaan</span><b>:</b><strong>{{ $audit->start_date?->locale('id')->translatedFormat('d F Y') ?: '-' }} – {{ $audit->end_date?->locale('id')->translatedFormat('d F Y') ?: '-' }}</strong></div>
-                <div><span>Ruang Lingkup</span><b>:</b><strong>{{ $audit->scope ?: 'Standar ISPO' }}</strong></div>
-                <div><span>Lead Auditor</span><b>:</b><strong>{{ $leadAuditor?->name ?: $audit->auditorNamesText() ?: '-' }}</strong></div>
+                <div><span>Luasan Lahan</span><b>:</b><strong>-</strong></div>
+                <div><span>Auditor</span><b>:</b><strong>{{ $leadAuditor?->name ?? $audit->auditor_name ?? '-' }}</strong></div>
+                <div><span>Tanggal Audit</span><b>:</b><strong>{{ $auditDate }}</strong></div>
             </div>
 
             <div class="report-introduction">

@@ -32,7 +32,8 @@
                 <div class="menu-split__panel" id="audit-export-menu" role="menu" aria-label="Export laporan">
                     <a class="menu-split__item" href="{{ route('audits.report', $audit) }}" role="menuitem">Cetak laporan</a>
                     <a class="menu-split__item" href="{{ route('audits.download', $audit) }}" role="menuitem">Download Word</a>
-                    <a class="menu-split__item menu-split__item--primary" href="{{ route('audits.pdf', $audit) }}" role="menuitem">Unduh Laporan PDF</a>
+                    <a class="menu-split__item" href="{{ route('audits.pdf', $audit) }}" target="_blank" rel="noopener noreferrer" role="menuitem">Preview PDF</a>
+                    <a class="menu-split__item menu-split__item--primary" href="{{ route('audits.pdf', ['audit' => $audit, 'download' => 1]) }}" role="menuitem">Unduh Laporan PDF</a>
                 </div>
             </div>
         @endif
@@ -104,13 +105,14 @@
                 <div class="hero__sub">{{ $audit->title ?: 'Audit Verifikasi ISPO' }}</div>
             </div>
         </div>
-        <div class="hero__body">
-            <div class="meta-row"><span>Nama perusahaan</span><b>{{ $audit->company->name }}</b></div>
-            <div class="meta-row"><span>Alamat</span><b>{{ $audit->company->address ?: 'Belum diisi' }}</b></div>
-            <div class="meta-row"><span>Bidang usaha</span><b>{{ $audit->company->industry ?: 'Belum diisi' }}</b></div>
-            <div class="meta-row"><span>Auditor</span><b>{{ $audit->auditorNamesText() ?: 'Belum ditentukan' }}</b></div>
-            <div class="meta-row"><span>Tanggal audit</span><b>{{ $audit->due_date?->translatedFormat('d F Y') ?: '-' }}</b></div>
-            <div class="meta-row"><span>Status audit</span><b>{{ $audit->status === 'completed' ? 'Selesai' : ($audit->status === 'in_progress' ? 'Sedang diverifikasi' : 'Belum mulai') }}</b></div>
+        <div class="hero__body audit-identity">
+            <div class="meta-row"><span>Nama Perusahaan</span><b>:</b><strong>{{ $audit->company->name ?: '-' }}</strong></div>
+            <div class="meta-row"><span>Alamat Perusahaan</span><b>:</b><strong>{{ $audit->company->address ?: '-' }}</strong></div>
+            <div class="meta-row"><span>Luasan Lahan</span><b>:</b><strong>-</strong></div>
+            <div class="meta-row"><span>Auditor</span><b>:</b><strong>{{ $audit->leadMember?->user?->name ?? $audit->auditor_name ?? '-' }}</strong></div>
+            <div class="meta-row"><span>Tanggal Audit</span><b>:</b><strong>{{ $audit->start_date && $audit->end_date
+                ? ($audit->start_date->locale('id')->translatedFormat('d F Y').' – '.$audit->end_date->locale('id')->translatedFormat('d F Y'))
+                : ($audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-') }}</strong></div>
         </div>
     </section>
 
@@ -323,7 +325,8 @@
             <div class="completion-actions">
                 @if ($canDownloadReport)
                     @if ($verifiedItems === $totalItems && $totalItems > 0)
-                        <a class="btn btn--primary" href="{{ route('audits.pdf', $audit) }}">Unduh Laporan PDF</a>
+                        <a class="btn btn--outline" href="{{ route('audits.pdf', $audit) }}" target="_blank" rel="noopener noreferrer">Preview PDF</a>
+                        <a class="btn btn--primary" href="{{ route('audits.pdf', ['audit' => $audit, 'download' => 1]) }}">Unduh Laporan PDF</a>
                     @else
                         <span class="draft-note">Lengkapi semua indikator untuk mengunduh seluruh prinsip dalam 1 file.</span>
                     @endif

@@ -1418,6 +1418,23 @@ img, svg { vertical-align: middle; }
     border-bottom: 1px solid #111;
 }
 
+.ispo-report-header--letterhead {
+    display: block;
+    border-bottom: 3px solid #1b2450;
+}
+
+.ispo-report-header--letterhead .report-form-code {
+    margin-left: 0;
+    text-align: right;
+}
+
+.report-letterhead-image {
+    display: block;
+    width: 100%;
+    max-height: 75px;
+    object-fit: contain;
+}
+
 .gis-logo {
     display: grid;
     width: 92px;
@@ -1436,9 +1453,14 @@ img, svg { vertical-align: middle; }
 .ispo-report-cover h2 { margin: 42px 0 5px; text-align: center; font-size: 27px; }
 .ispo-report-cover h3 { margin: 0; text-align: center; font-size: 22px; }
 
-.report-facts { width: min(760px, 100%); margin: 38px auto 0; font-size: 16px; }
-.report-facts > div { display: grid; grid-template-columns: 185px 18px 1fr; gap: 8px; margin: 11px 0; }
+.report-facts { width: 100%; margin: 38px auto 0; font-size: 16px; }
+.report-facts > div { display: grid; grid-template-columns: 170px 15px 1fr; gap: 0; margin: 11px 0; }
 .report-facts strong { font-weight: 400; }
+.audit-identity { grid-template-columns: 1fr; }
+.audit-identity .meta-row { display: grid; grid-template-columns: 170px 15px 1fr; gap: 0; }
+.audit-identity .meta-row span { min-width: 0; font-weight: 400; }
+.audit-identity .meta-row b { font-weight: 400; text-align: center; }
+.audit-identity .meta-row strong { font-weight: 600; }
 
 .report-introduction { margin-top: 62px; font-size: 15px; line-height: 1.55; }
 .report-introduction h4 { margin: 0 0 28px; font-size: 20px; }

@@ -112,10 +112,108 @@ class AuditWorkflowTest extends TestCase
             ->assertSee('LAPORAN VERIFIKASI HASIL ISPO')
             ->assertSee('Indikator 1')
             ->assertSee('Indikator 7')
-            ->assertSee('Parameter tujuh');
+            ->assertSee('Parameter tujuh')
+            ->assertSee('class="report-letterhead-image"', false)
+            ->assertSee('data:image/jpeg;base64,', false);
     }
 
-    public function test_audit_pdf_download_returns_a_pdf_file(): void
+    public function test_audit_report_and_show_display_only_the_five_standard_identity_rows(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create([
+            'title' => 'Judul audit tambahan',
+            'scope' => 'Ruang lingkup tambahan',
+            'auditor_name' => 'Auditor Utama',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-01-07',
+        ]);
+        $labels = [
+            'Nama Perusahaan',
+            'Alamat Perusahaan',
+            'Luasan Lahan',
+            'Auditor',
+            'Tanggal Audit',
+        ];
+
+        $reportContent = $this->get(route('audits.report', $audit))
+            ->assertOk()
+            ->getContent();
+        preg_match_all('/<div><span>(.*?)<\/span><b>:/s', $reportContent, $reportLabels);
+
+        $this->assertSame($labels, array_map(
+            static fn (string $label): string => trim(strip_tags($label)),
+            $reportLabels[1],
+        ));
+
+        $showContent = $this->get(route('audits.show', $audit))
+            ->assertOk()
+            ->getContent();
+        preg_match_all('/<div class="meta-row"><span>(.*?)<\/span>/s', $showContent, $showLabels);
+
+        $this->assertSame($labels, array_map(
+            static fn (string $label): string => trim(strip_tags($label)),
+            $showLabels[1],
+        ));
+        $this->assertStringContainsString('01 Januari 2026 – 07 Januari 2026', $reportContent);
+        $this->assertStringContainsString('01 Januari 2026 – 07 Januari 2026', $showContent);
+    }
+
+    public function test_pdf_facts_table_contains_only_the_five_standard_rows(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit pdf facts']);
+
+        $html = view('audits.pdf', [
+            'audit' => $audit->load('company'),
+            'items' => $audit->items,
+            'isIspoChecklist' => false,
+            'principles' => collect(),
+        ])->render();
+
+        preg_match('/<table class="facts">(.*?)<\/table>/s', $html, $factsTable);
+        $this->assertArrayHasKey(1, $factsTable);
+
+        preg_match_all('/<td class="k">(.*?)<\/td>/s', $factsTable[1], $labels);
+
+        $this->assertSame([
+            'Nama Perusahaan',
+            'Alamat Perusahaan',
+            'Luasan Lahan',
+            'Auditor',
+            'Tanggal Audit',
+        ], array_map(static fn (string $label): string => trim(strip_tags($label)), $labels[1]));
+    }
+
+    public function test_audit_views_offer_preview_and_download_pdf_actions(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit report actions']);
+        $audit->items()->create([
+            'title' => '1.1.1 Izin lokasi dan KKPR',
+            'sort_order' => 1,
+            'status' => 'compliant',
+        ]);
+        $previewUrl = route('audits.pdf', $audit);
+        $downloadUrl = route('audits.pdf', ['audit' => $audit, 'download' => 1]);
+
+        $this->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertSee('Preview PDF')
+            ->assertSee('Unduh Laporan PDF')
+            ->assertSee('target="_blank" rel="noopener noreferrer"', false)
+            ->assertSee($previewUrl, false)
+            ->assertSee($downloadUrl, false);
+
+        $this->get(route('audits.report', $audit))
+            ->assertOk()
+            ->assertSee('Preview PDF')
+            ->assertSee('Unduh Laporan PDF')
+            ->assertSee('target="_blank" rel="noopener noreferrer"', false)
+            ->assertSee($previewUrl, false)
+            ->assertSee($downloadUrl, false);
+    }
+
+    public function test_audit_pdf_preview_returns_an_inline_pdf_file(): void
     {
         $company = Company::factory()->create();
         $audit = $company->audits()->create(['title' => 'Audit pdf']);
@@ -127,9 +225,27 @@ class AuditWorkflowTest extends TestCase
         $response = $this->get(route('audits.pdf', $audit));
 
         $response->assertOk();
-        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
+        $response->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('inline;', (string) $response->headers->get('content-disposition'));
         $this->assertStringContainsString('laporan-verifikasi-ispo-', (string) $response->headers->get('content-disposition'));
         $this->assertStringStartsWith('%PDF-', $response->getContent());
+    }
+
+    public function test_audit_pdf_download_returns_an_attachment_when_requested(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit pdf download']);
+        $audit->items()->create([
+            'title' => '1.1.1 Izin lokasi dan KKPR',
+            'sort_order' => 1,
+            'status' => 'compliant',
+        ]);
+
+        $response = $this->get(route('audits.pdf', ['audit' => $audit, 'download' => 1]));
+
+        $response->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('attachment;', (string) $response->headers->get('content-disposition'));
     }
 
     public function test_audit_pdf_download_handles_the_full_ispo_checklist(): void
@@ -347,16 +463,17 @@ class AuditWorkflowTest extends TestCase
             ->assertSee('PT Sawit Contoh')
             ->assertSee('Perkebunan Kelapa Sawit')
             ->assertSee('Jalan Kebun No. 7')
-            ->assertSee('PIC Perusahaan')
-            ->assertSee('Surveillance 1')
             ->assertSee('01 Januari 2026')
             ->assertSee('07 Januari 2026')
-            ->assertSee('Standar ISPO - Kebun & PKS')
             ->assertSee('Lead Audit')
             ->assertSee('Auditor Prinsip Satu')
             ->assertSee('Bukti hasil verifikasi.')
             ->assertSee('Temuan utama audit')
-            ->assertSee('Dokumen perlu diperbarui.');
+            ->assertSee('Dokumen perlu diperbarui.')
+            ->assertDontSee('PIC Perusahaan')
+            ->assertDontSee('Ruang Lingkup')
+            ->assertDontSee('Surveillance 1')
+            ->assertDontSee('Standar ISPO - Kebun & PKS');
     }
 
     public function test_unassigned_auditor_cannot_view_another_projects_report_or_pdf(): void

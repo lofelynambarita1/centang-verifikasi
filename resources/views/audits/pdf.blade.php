@@ -6,20 +6,22 @@
     <style>
         @page { size: A4 portrait; margin: 16mm 15mm 18mm; }
         * { box-sizing: border-box; }
-        body { font-family: 'DejaVu Sans', sans-serif; font-size: 10px; color: #111; line-height: 1.5; margin: 0; }
-        .form-code { text-align: right; font-size: 9px; color: #444; margin: 0 0 8px; }
+        body { font-family: Arial, 'DejaVu Sans', sans-serif; font-size: 10px; color: #000000; line-height: 1.5; margin: 0; }
+        .letterhead { width: 100%; margin-bottom: 16px; padding-bottom: 6px; border-bottom: 2px solid #1b2450; text-align: center; }
+        .letterhead-image { display: block; width: 100%; max-height: 75px; margin: 0 auto; object-fit: contain; }
         .brand-table { width: 100%; border-collapse: collapse; }
-        .brand-table td { border-bottom: 3px solid #29346c; padding-bottom: 8px; vertical-align: middle; }
+        .brand-table td { border-bottom: 3px solid #1b2450; padding-bottom: 8px; vertical-align: middle; }
         .gis-mark { width: 44px; }
         .gis-circle { display: inline-block; width: 34px; height: 34px; border: 2px solid #1b2450; border-radius: 50%; text-align: center; line-height: 30px; font-weight: bold; font-size: 13px; color: #1b2450; }
         .brand-name { font-size: 15px; font-weight: bold; color: #29346c; text-transform: uppercase; letter-spacing: .02em; }
         .brand-sub { font-size: 10px; color: #666; font-style: italic; }
-        h1.title { text-align: center; font-size: 14px; margin: 18px 0 2px; }
-        .auditee { text-align: center; font-size: 11px; font-weight: bold; text-transform: uppercase; margin: 0 0 16px; }
-        table.facts { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-        table.facts td { padding: 1px 4px; vertical-align: top; }
-        table.facts td.k { width: 150px; }
-        table.facts td.s { width: 16px; }
+        h1.title { text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase; margin: 0 0 4px; }
+        .auditee { text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 0 0 20px; }
+        table.facts { width: 100%; border: none; border-collapse: collapse; margin-bottom: 18px; font-size: 10pt; line-height: 1.6; }
+        table.facts, table.facts tr, table.facts td { border: none; }
+        table.facts td { padding: 0; vertical-align: top; text-align: left; }
+        table.facts td.k { width: 170px; font-weight: normal; }
+        table.facts td.s { width: 15px; text-align: center; }
         h2.section { font-size: 12px; margin: 16px 0 6px; color: #29346c; }
         h2.principle { font-size: 11px; margin: 16px 0 6px; color: #1b2450; text-transform: uppercase; border-bottom: 1px solid #1b2450; padding-bottom: 3px; }
         h3.criteria { font-size: 10.5px; margin: 12px 0 3px; padding-bottom: 3px; border-bottom: 1px solid #bbb; }
@@ -65,32 +67,49 @@
         ];
         $principleTitles = config('ispo.principles', []);
         $criteriaMap = config('ispo.criteria', []);
+        $logoPath = public_path('images/logo-gis-kop.jpg');
+        $logoContents = is_file($logoPath) ? file_get_contents($logoPath) : false;
+        $logoDataUri = $logoContents !== false
+            ? 'data:image/jpeg;base64,'.base64_encode($logoContents)
+            : null;
         $groups = $isIspoChecklist
             ? $principles->map(fn ($group) => $group->sortBy('sort_order')->values())
             : collect([0 => $items]);
     @endphp
 
-    <div class="form-code">FrO. 8603/GIS-1.1</div>
-
-    <table class="brand-table">
-        <tr>
-            <td class="gis-mark"><span class="gis-circle">GIS</span></td>
-            <td>
-                <div class="brand-name">PT. GLOBAL INSPEKSI SERTIFIKASI</div>
-                <div class="brand-sub">Inspection &amp; Certification Body</div>
-            </td>
-        </tr>
-    </table>
+    @if ($logoDataUri)
+        <div class="letterhead">
+            <img class="letterhead-image" src="{{ $logoDataUri }}" alt="Kop PT. Global Inspeksi Sertifikasi">
+        </div>
+    @else
+        <div class="letterhead">
+            <table class="brand-table">
+                <tr>
+                    <td class="gis-mark"><span class="gis-circle">GIS</span></td>
+                    <td>
+                        <div class="brand-name">PT. GLOBAL INSPEKSI SERTIFIKASI</div>
+                        <div class="brand-sub">Inspection &amp; Certification Body</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    @endif
 
     <h1 class="title">LAPORAN VERIFIKASI HASIL ISPO</h1>
-    <div class="auditee">(AUDITEE / {{ strtoupper($audit->company->name ?: 'NAMA KLIEN') }})</div>
+    <div class="auditee">(AUDITEE/{{ strtoupper($audit->company->name ?: 'NAMA KLIEN') }})</div>
 
     <table class="facts">
         <tr><td class="k">Nama Perusahaan</td><td class="s">:</td><td>{{ $audit->company->name ?: '-' }}</td></tr>
         <tr><td class="k">Alamat Perusahaan</td><td class="s">:</td><td>{{ $audit->company->address ?: '-' }}</td></tr>
         <tr><td class="k">Luasan Lahan</td><td class="s">:</td><td>-</td></tr>
-        <tr><td class="k">Auditor</td><td class="s">:</td><td>{{ $audit->auditor_name ?: '-' }}</td></tr>
-        <tr><td class="k">Tanggal Audit</td><td class="s">:</td><td>{{ $audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-' }}</td></tr>
+        <tr><td class="k">Auditor</td><td class="s">:</td><td>{{ $audit->leadMember?->user?->name ?? $audit->auditor_name ?? '-' }}</td></tr>
+        <tr>
+            <td class="k">Tanggal Audit</td>
+            <td class="s">:</td>
+            <td>{{ $audit->start_date && $audit->end_date
+                ? ($audit->start_date->locale('id')->translatedFormat('d F Y').' – '.$audit->end_date->locale('id')->translatedFormat('d F Y'))
+                : ($audit->due_date?->locale('id')->translatedFormat('d F Y') ?: '-') }}</td>
+        </tr>
     </table>
 
     <h2 class="section">I. HASIL PENILAIAN</h2>

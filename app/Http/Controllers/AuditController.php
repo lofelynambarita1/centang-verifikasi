@@ -149,7 +149,7 @@ class AuditController extends Controller
 
     public function show(Audit $audit): View
     {
-        $audit->load(['company', 'findings', 'assignees']);
+        $audit->load(['company', 'findings', 'assignees', 'leadMember.user']);
         $canDownloadReport = auth()->user() !== null && $audit->userCanAccessReport(auth()->user());
         $allItems = $audit->items()->with('hasils')->get();
         $isIspoChecklist = $allItems->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
@@ -505,7 +505,7 @@ class AuditController extends Controller
         ]);
     }
 
-    public function pdf(Audit $audit): mixed
+    public function pdf(Audit $audit, Request $request): mixed
     {
         abort_unless(auth()->user() !== null && $audit->userCanAccessReport(auth()->user()), 403);
 
@@ -563,7 +563,11 @@ class AuditController extends Controller
             'assignedAuditorNames' => $assignedAuditorNames,
         ])->setPaper('a4', 'portrait');
 
-        return $pdf->download('laporan-verifikasi-ispo-'.Str::slug($audit->company->name).'.pdf');
+        $filename = 'laporan-verifikasi-ispo-'.Str::slug($audit->company->name).'.pdf';
+
+        return $request->boolean('download')
+            ? $pdf->download($filename)
+            : $pdf->stream($filename);
     }
 
     public function download(Audit $audit): mixed
