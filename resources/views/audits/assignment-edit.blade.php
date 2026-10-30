@@ -38,7 +38,7 @@
             <div>
                 <span class="assignment-panel__eyebrow">Pengaturan proyek</span>
                 <h2 id="assignment-panel-title">Atur tim dan penanggung jawab prinsip</h2>
-                <p>Tentukan Lead Auditor proyek, pilih tim auditor proyek, lalu bagi tugas penanggung jawab untuk setiap prinsip ISPO. Perubahan berlaku setelah disimpan.</p>
+                <p>Tentukan satu Lead Auditor, pilih anggota tim audit, lalu tetapkan penanggung jawab untuk Prinsip ISPO 1–7. Daftar auditor pada penugasan prinsip akan mengikuti pilihan tim di atas.</p>
             </div>
             <span class="role-badge role-badge--lead_audit">Admin / Lead audit</span>
         </div>
@@ -54,7 +54,7 @@
                     <strong><span>01</span> Lead Auditor Proyek</strong>
                 </legend>
                 <p class="assignment-row__description">
-                    Anggota yang ditugaskan sebagai Lead Auditor pada proyek ini berhak mengisi checklist verifikasi, melakukan finalisasi/approval audit, dan mencetak laporan hasil ISPO.
+                    Pilih satu auditor sebagai pemimpin proyek. Lead Auditor dapat mengisi checklist, menyetujui penyelesaian audit, dan mencetak laporan.
                 </p>
                 <div class="field assignment-lead-field">
                     <label for="lead_auditor_id">Pilih Lead Auditor</label>
@@ -75,7 +75,7 @@
                     <strong><span>02</span> Tim Auditor Proyek</strong>
                 </legend>
                 <p class="assignment-row__description">
-                    Pilih auditor yang ditugaskan ke dalam tim proyek ini. Hanya user yang dipilih ke dalam tim proyek inilah yang terdaftar di AuditProjectMember dan dapat ditugaskan pada Prinsip 1–7.
+                    Centang semua auditor yang menjadi anggota proyek. Hanya Lead Auditor dan anggota yang dipilih di sini yang dapat ditugaskan ke Prinsip 1–7.
                 </p>
                 <div class="assignment-users" id="teamSelectionGrid">
                     @forelse ($availableAuditors as $auditor)
@@ -106,7 +106,7 @@
                 <div>
                     <h3>Penugasan Prinsip ISPO</h3>
                     <p>
-                        Pilih penanggung jawab Prinsip 1 s/d 7 dari anggota tim proyek yang telah dipilih (Lead Auditor + Anggota Auditor terpilih).
+                        Tetapkan satu penanggung jawab untuk setiap prinsip. Pilihan auditor berasal dari Lead Auditor dan anggota tim yang dipilih di atas.
                     </p>
                 </div>
             </div>

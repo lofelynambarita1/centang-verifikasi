@@ -963,25 +963,37 @@ img, svg { vertical-align: middle; }
 }
 .assignment-users { margin-top: 14px; gap: 9px; }
 .assignment-users .check-control {
+    display: grid;
     grid-template-columns: 21px minmax(0, 1fr);
+    grid-template-rows: auto auto;
     gap: 4px 10px;
+    align-items: center;
     min-height: 58px;
+    width: 100%;
     padding: 10px 12px;
     border-radius: 10px;
 }
 .assignment-users .check-control input {
-    grid-row: span 2;
+    grid-column: 1;
+    grid-row: 1 / span 2;
     width: 19px;
     height: 19px;
 }
-.assignment-users .check-control span { font-size: 14px; }
+.assignment-users .check-control span {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 14px;
+}
 .assignment-users .check-control small {
+    grid-column: 2;
+    grid-row: 2;
     justify-self: start;
     max-width: 100%;
-    padding: 0;
-    background: transparent;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f0f3f9;
     color: var(--muted);
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 600;
     overflow-wrap: anywhere;
     white-space: normal;
@@ -997,7 +1009,23 @@ img, svg { vertical-align: middle; }
 .assignment-matrix td:first-child { width: 42%; }
 .assignment-matrix th { background: #f5f7fc; }
 .assignment-matrix td { padding-top: 12px; padding-bottom: 12px; }
-.assignment-matrix__title { font-size: 12px; line-height: 1.5; }
+.assignment-matrix td:first-child strong {
+    display: inline-flex;
+    align-items: center;
+    min-height: 25px;
+    padding: 2px 8px;
+    border-radius: 7px;
+    background: #eef2fb;
+    color: #2e426b;
+    font-size: 12px;
+}
+.assignment-matrix__title {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
 .assignment-matrix__select {
     min-height: 42px;
     border-radius: 9px;
