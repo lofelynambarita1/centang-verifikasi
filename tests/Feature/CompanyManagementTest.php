@@ -151,9 +151,63 @@ class CompanyManagementTest extends TestCase
             ->assertSee('Dewi Lestari')
             ->assertSee('dewi@sawit.co.id')
             ->assertSee('Detail / Riwayat')
+            ->assertSee('+ Tambah perusahaan')
+            ->assertSee('Edit')
+            ->assertSee('Hapus')
             ->assertSee('2')
             ->assertDontSee('Auditor / Tanggal')
             ->assertDontSee('Progres verifikasi')
             ->assertDontSee('Surveillance 1');
+    }
+
+    public function test_auditors_and_lead_auditors_can_view_companies_but_not_management_controls(): void
+    {
+        $users = [];
+
+        foreach (['auditor', 'lead_audit'] as $role) {
+            $user = User::factory()->create(['role' => $role]);
+            $users[] = $user;
+
+            $this->actingAs($user)
+                ->get(route('companies.index'))
+                ->assertOk()
+                ->assertDontSee('+ Tambah perusahaan');
+        }
+
+        $company = Company::factory()->create(['name' => 'PT Sawit Sejahtera']);
+
+        foreach ($users as $user) {
+            $this->actingAs($user)
+                ->get(route('companies.index'))
+                ->assertOk()
+                ->assertSee('Detail / Riwayat')
+                ->assertDontSee('+ Tambah perusahaan')
+                ->assertDontSee('Edit')
+                ->assertDontSee('Hapus');
+
+            $this->actingAs($user)
+                ->get(route('companies.show', $company))
+                ->assertOk();
+        }
+    }
+
+    public function test_auditors_and_lead_auditors_cannot_manage_company_master_data(): void
+    {
+        $company = Company::factory()->create();
+        $originalName = $company->name;
+
+        foreach (['auditor', 'lead_audit'] as $role) {
+            $user = User::factory()->create(['role' => $role]);
+
+            $this->actingAs($user)->get(route('companies.create'))->assertForbidden();
+            $this->actingAs($user)->post(route('companies.store'), ['name' => 'PT Tidak Diizinkan'])->assertForbidden();
+            $this->actingAs($user)->get(route('companies.edit', $company))->assertForbidden();
+            $this->actingAs($user)->put(route('companies.update', $company), ['name' => 'PT Tidak Diizinkan'])->assertForbidden();
+            $this->actingAs($user)->delete(route('companies.destroy', $company))->assertForbidden();
+        }
+
+        $this->assertDatabaseMissing('companies', ['name' => 'PT Tidak Diizinkan']);
+        $this->assertDatabaseHas('companies', ['id' => $company->id, 'name' => $originalName]);
+        $this->assertModelExists($company);
     }
 }

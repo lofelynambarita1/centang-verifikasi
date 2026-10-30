@@ -15,7 +15,9 @@
 @section('heading', 'Daftar perusahaan')
 
 @section('actions')
-    <a class="btn btn--primary" href="{{ route('companies.create') }}">+ Tambah perusahaan</a>
+    @if (auth()->user()->isAdmin())
+        <a class="btn btn--primary" href="{{ route('companies.create') }}">+ Tambah perusahaan</a>
+    @endif
 @endsection
 
 @section('content')
@@ -56,12 +58,14 @@
                         <td>
                             <div class="cell-actions">
                                 <a class="btn btn--ghost btn--sm" href="{{ route('companies.show', $company) }}">Detail / Riwayat</a>
-                                <a class="btn btn--ghost btn--sm" href="{{ route('companies.edit', $company) }}">Edit</a>
-                                <form method="POST" action="{{ route('companies.destroy', $company) }}" onsubmit="return confirm('Hapus perusahaan ini beserta auditnya?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn btn--danger btn--sm" type="submit">Hapus</button>
-                                </form>
+                                @if (auth()->user()->isAdmin())
+                                    <a class="btn btn--ghost btn--sm" href="{{ route('companies.edit', $company) }}">Edit</a>
+                                    <form method="POST" action="{{ route('companies.destroy', $company) }}" onsubmit="return confirm('Hapus perusahaan ini beserta auditnya?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn btn--danger btn--sm" type="submit">Hapus</button>
+                                    </form>
+                                @endif
                             </div>
                         </td>
                     </tr>
@@ -75,7 +79,9 @@
                                 </svg>
                                 <strong>Belum ada perusahaan</strong>
                                 <span>Tambahkan perusahaan terlebih dahulu untuk membuat audit verifikasi baru.</span>
-                                <a class="btn btn--primary" href="{{ route('companies.create') }}">+ Tambah perusahaan</a>
+                                @if (auth()->user()->isAdmin())
+                                    <a class="btn btn--primary" href="{{ route('companies.create') }}">+ Tambah perusahaan</a>
+                                @endif
                             </div>
                         </td>
                     </tr>
