@@ -3,13 +3,19 @@
 @section('title', 'Penanggung jawab prinsip | '.$audit->company->name)
 @section('eyebrow', 'PENGELOLAAN AUDIT')
 @section('heading', 'Penanggung jawab prinsip')
+@section('page-class', 'assignment-edit-page')
 
 @section('actions')
     <a class="btn btn--ghost" href="{{ route('audits.assignments.index') }}">Kembali ke daftar audit</a>
 @endsection
 
 @section('content')
-    <p class="page-intro"><strong>{{ $audit->company->name }}</strong> · {{ $audit->title ?: 'Audit Verifikasi ISPO' }}</p>
+    <p class="page-intro assignment-context">
+        <span class="assignment-context__label">Proyek audit</span>
+        <strong>{{ $audit->company->name }}</strong>
+        <span class="assignment-context__separator" aria-hidden="true">/</span>
+        <span>{{ $audit->title ?: 'Audit Verifikasi ISPO' }}</span>
+    </p>
 
     @php
         $principleTitles = [
@@ -27,10 +33,11 @@
         $currentLeadId = (int) old('lead_auditor_id', $audit->leadMember?->user_id);
     @endphp
 
-    <section class="panel panel--pad assignment-panel">
-        <div class="panel__head">
+    <section class="panel assignment-panel" aria-labelledby="assignment-panel-title">
+        <div class="panel__head assignment-panel__head">
             <div>
-                <h2>Atur Tim dan Penanggung Jawab Prinsip</h2>
+                <span class="assignment-panel__eyebrow">Pengaturan proyek</span>
+                <h2 id="assignment-panel-title">Atur tim dan penanggung jawab prinsip</h2>
                 <p>Tentukan Lead Auditor proyek, pilih tim auditor proyek, lalu bagi tugas penanggung jawab untuk setiap prinsip ISPO. Perubahan berlaku setelah disimpan.</p>
             </div>
             <span class="role-badge role-badge--lead_audit">Admin / Lead audit</span>
@@ -42,16 +49,16 @@
             <input type="hidden" name="team_members_present" value="1">
 
             {{-- 1. Pilihan Lead Auditor Proyek --}}
-            <fieldset class="assignment-row" style="margin-bottom: 2rem; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; padding: 1.25rem;">
-                <legend style="font-weight: 700; font-size: 1.05rem;">
-                    <strong>Lead Auditor Proyek</strong>
+            <fieldset class="assignment-row assignment-row--lead" aria-labelledby="lead-auditor-legend">
+                <legend id="lead-auditor-legend">
+                    <strong><span>01</span> Lead Auditor Proyek</strong>
                 </legend>
-                <p style="margin-top: 0.25rem; margin-bottom: 1rem; font-size: 0.875rem; color: var(--text-muted, #64748b);">
+                <p class="assignment-row__description">
                     Anggota yang ditugaskan sebagai Lead Auditor pada proyek ini berhak mengisi checklist verifikasi, melakukan finalisasi/approval audit, dan mencetak laporan hasil ISPO.
                 </p>
-                <div class="field" style="max-width: 480px;">
-                    <label for="lead_auditor_id" style="font-weight: 600; display: block; margin-bottom: 0.35rem;">Pilih Lead Auditor</label>
-                    <select id="lead_auditor_id" name="lead_auditor_id" class="input js-lead-auditor-select" style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color, #cbd5e1); font-size: 0.95rem;">
+                <div class="field assignment-lead-field">
+                    <label for="lead_auditor_id">Pilih Lead Auditor</label>
+                    <select id="lead_auditor_id" name="lead_auditor_id" class="input js-lead-auditor-select">
                         <option value="">-- Belum Ditentukan / Pilih Lead Auditor --</option>
                         @foreach ($availableAuditors as $auditor)
                             <option value="{{ $auditor->id }}" @selected($currentLeadId === $auditor->id) data-name="{{ $auditor->name }}">
@@ -63,11 +70,11 @@
             </fieldset>
 
             {{-- 2. Seleksi Anggota Tim Auditor Proyek --}}
-            <fieldset class="assignment-row" style="margin-bottom: 2rem; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; padding: 1.25rem;">
-                <legend style="font-weight: 700; font-size: 1.05rem;">
-                    <strong>Tim Auditor Proyek</strong>
+            <fieldset class="assignment-row assignment-row--team" aria-labelledby="project-team-legend">
+                <legend id="project-team-legend">
+                    <strong><span>02</span> Tim Auditor Proyek</strong>
                 </legend>
-                <p style="margin-top: 0.25rem; margin-bottom: 1rem; font-size: 0.875rem; color: var(--text-muted, #64748b);">
+                <p class="assignment-row__description">
                     Pilih auditor yang ditugaskan ke dalam tim proyek ini. Hanya user yang dipilih ke dalam tim proyek inilah yang terdaftar di AuditProjectMember dan dapat ditugaskan pada Prinsip 1–7.
                 </p>
                 <div class="assignment-users" id="teamSelectionGrid">
@@ -95,10 +102,13 @@
 
             {{-- 3. Penugasan Prinsip ISPO (Prinsip 1 - 7) --}}
             <div class="assignment-form__section-heading">
-                <h3 style="font-size: 1rem; font-weight: 700;">Penugasan Prinsip ISPO (Prinsip 1 - 7)</h3>
-                <p style="font-size: 0.875rem; color: var(--text-muted, #64748b);">
-                    Pilih penanggung jawab Prinsip 1 s/d 7 dari anggota tim proyek yang telah dipilih (Lead Auditor + Anggota Auditor terpilih).
-                </p>
+                <span class="assignment-form__step">03</span>
+                <div>
+                    <h3>Penugasan Prinsip ISPO</h3>
+                    <p>
+                        Pilih penanggung jawab Prinsip 1 s/d 7 dari anggota tim proyek yang telah dipilih (Lead Auditor + Anggota Auditor terpilih).
+                    </p>
+                </div>
             </div>
 
             <div class="table-wrap assignment-matrix-wrap">
@@ -147,7 +157,10 @@
                 </table>
             </div>
 
-            <button class="btn btn--primary" type="submit">Simpan penugasan</button>
+            <div class="assignment-form__actions">
+                <p>Pastikan lead auditor dan tim proyek sudah benar sebelum menyimpan.</p>
+                <button class="btn btn--primary" type="submit">Simpan penugasan</button>
+            </div>
         </form>
     </section>
 

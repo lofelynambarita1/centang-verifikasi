@@ -806,109 +806,253 @@ img, svg { vertical-align: middle; }
 .role-badge--admin { background: #e9ecfa; color: var(--primary); }
 .role-badge--lead_audit { background: #fce8e5; color: var(--danger); }
 .role-badge--auditor { background: #e9f2ee; color: var(--success); }
-.assignment-panel { margin-bottom: 18px; }
-.assignment-panel .panel__head { align-items: center; margin-bottom: 18px; }
+.assignment-edit-page .app-content { max-width: 1320px; }
+.assignment-context {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: none;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-size: 13px;
+}
+.assignment-context__label {
+    padding: 5px 9px;
+    border: 1px solid #dfe5f1;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .76);
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.assignment-context strong { color: var(--text); font-weight: 800; }
+.assignment-context__separator { color: #a0a7b8; }
+.assignment-panel {
+    overflow: hidden;
+    margin-bottom: 18px;
+    border-color: rgba(205, 209, 223, .9);
+    border-radius: 18px;
+    box-shadow: 0 18px 42px -30px rgba(32, 41, 82, .42);
+}
+.assignment-panel .panel__head {
+    align-items: center;
+    margin: 0;
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid #edf0f6;
+    background: linear-gradient(115deg, #fff 0%, #f7f9ff 100%);
+}
+.assignment-panel__head > div { max-width: 760px; }
+.assignment-panel__eyebrow {
+    display: block;
+    margin-bottom: 5px;
+    color: #7581a0;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+}
+.assignment-panel .panel__head h2 {
+    color: var(--text);
+    font-size: clamp(18px, 2vw, 22px);
+    letter-spacing: -.04em;
+    line-height: 1.3;
+}
+.assignment-panel .panel__head p {
+    max-width: 740px;
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 1.65;
+}
+.assignment-panel .role-badge { align-self: flex-start; }
 .assignment-form {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
-    gap: 18px;
+    grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+    align-items: start;
+    gap: 20px;
+    padding: 24px 28px 28px;
 }
-.assignment-form > .btn {
-    grid-column: 1 / -1;
-    justify-self: start;
-    min-height: 52px;
-    padding: 14px 22px;
-    font-size: 16px;
-}
-.assignment-form__section-heading,
-.assignment-matrix-wrap { grid-column: 1 / -1; }
-.assignment-form__section-heading { margin-bottom: -10px; }
-.assignment-matrix { min-width: 640px; table-layout: fixed; }
-.assignment-matrix th:first-child,
-.assignment-matrix td:first-child { width: 48%; }
-.assignment-matrix td { padding-top: 11px; padding-bottom: 11px; }
-.assignment-matrix__title { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; }
-.assignment-matrix__select {
-    width: 100%;
-    min-height: 42px;
-    padding: 9px 12px;
-    border: 1px solid var(--border-strong);
-    border-radius: 9px;
-    background: #fff;
-    color: var(--text);
-    font-size: 14px;
-}
-.assignment-matrix__select:focus { outline: 3px solid rgba(49, 76, 154, .18); border-color: var(--primary); }
 .assignment-row {
     min-width: 0;
     margin: 0;
-    padding: 18px 20px 20px;
+    padding: 16px;
     border: 1px solid #e1e6f0;
-    border-radius: 12px;
-    background: linear-gradient(145deg, #fff 0%, #f9faff 100%);
+    border-radius: 14px;
+    background: linear-gradient(145deg, #fff 0%, #fbfcff 100%);
     transition: border-color .16s ease, box-shadow .16s ease;
 }
-.assignment-row:hover { border-color: #cbd5eb; box-shadow: 0 6px 16px -14px rgba(32, 41, 82, .6); }
+.assignment-row:hover {
+    border-color: #cbd5eb;
+    box-shadow: 0 8px 20px -18px rgba(32, 41, 82, .65);
+}
 .assignment-row legend {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    width: 100%;
-    padding: 0 6px;
-    color: var(--text);
-    font-size: 16px;
-    line-height: 1.45;
+    max-width: 100%;
+    padding: 0 7px;
 }
 .assignment-row legend strong {
-    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     padding: 5px 10px;
     border: 1px solid #dce4f4;
-    border-radius: 7px;
-    background: #eef3ff;
+    border-radius: 8px;
+    background: #f0f4ff;
     color: var(--primary);
     font-size: 13px;
-    line-height: 1.35;
-}
-.assignment-row legend span { min-width: 0; padding-top: 3px; color: var(--muted); font-size: 15px; line-height: 1.5; }
-.assignment-users {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-top: 16px;
-}
-.assignment-users .check-control {
-    display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-    min-height: 60px;
-    padding: 12px 14px;
-    border: 1px solid #e1e6f0;
-    border-radius: 9px;
-    background: #fff;
-    color: var(--text);
-    cursor: pointer;
-    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, outline-color .15s ease;
-}
-.assignment-users .check-control:hover { border-color: #bac8e6; background: #f8faff; }
-.assignment-users .check-control:focus-within { outline: 3px solid rgba(49, 76, 154, .28); outline-offset: 2px; }
-.assignment-users .check-control:has(input:checked) {
-    border-color: #9cadde;
-    background: #eef3ff;
-    box-shadow: inset 3px 0 0 var(--primary);
-}
-.assignment-users .check-control input { width: 22px; height: 22px; margin: 0; accent-color: var(--primary); }
-.assignment-users .check-control span { min-width: 0; overflow-wrap: anywhere; color: var(--text); font-size: 16px; font-weight: 700; line-height: 1.45; }
-.assignment-users .check-control small {
-    padding: 5px 9px;
-    border-radius: 999px;
-    background: #e9edf6;
-    color: #39445f;
-    font-size: 12px;
-    font-weight: 700;
     line-height: 1.4;
-    white-space: nowrap;
+}
+.assignment-row legend strong span,
+.assignment-form__step {
+    display: inline-grid;
+    width: 23px;
+    height: 23px;
+    flex: 0 0 23px;
+    place-items: center;
+    border-radius: 7px;
+    background: #dfe8ff;
+    color: #2e4a95;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+.assignment-row__description {
+    margin: 3px 0 18px;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.65;
+}
+.assignment-lead-field { max-width: none; }
+.assignment-lead-field > label { font-size: 13px; }
+.assignment-lead-field select {
+    width: 100%;
+    min-height: 46px;
+    border-radius: 10px;
+    font-size: 14px;
+}
+.assignment-form__section-heading,
+.assignment-matrix-wrap,
+.assignment-form__actions { grid-column: 1 / -1; }
+.assignment-form__section-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 3px 0 -7px;
+}
+.assignment-form__section-heading > div { min-width: 0; }
+.assignment-form__section-heading h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -.025em;
+}
+.assignment-form__section-heading p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.6;
+}
+.assignment-form__section-heading .assignment-form__step {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    border-radius: 9px;
+    font-size: 11px;
+}
+.assignment-users { margin-top: 14px; gap: 9px; }
+.assignment-users .check-control {
+    grid-template-columns: 21px minmax(0, 1fr);
+    gap: 4px 10px;
+    min-height: 58px;
+    padding: 10px 12px;
+    border-radius: 10px;
+}
+.assignment-users .check-control input {
+    grid-row: span 2;
+    width: 19px;
+    height: 19px;
+}
+.assignment-users .check-control span { font-size: 14px; }
+.assignment-users .check-control small {
+    justify-self: start;
+    max-width: 100%;
+    padding: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+.assignment-matrix-wrap {
+    overflow: hidden;
+    border: 1px solid #e4e8f1;
+    border-radius: 12px;
+    background: #fff;
+}
+.assignment-matrix { width: 100%; min-width: 0; table-layout: fixed; }
+.assignment-matrix th:first-child,
+.assignment-matrix td:first-child { width: 42%; }
+.assignment-matrix th { background: #f5f7fc; }
+.assignment-matrix td { padding-top: 12px; padding-bottom: 12px; }
+.assignment-matrix__title { font-size: 12px; line-height: 1.5; }
+.assignment-matrix__select {
+    min-height: 42px;
+    border-radius: 9px;
+    font-size: 13px;
+}
+.assignment-form__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-top: 18px;
+    border-top: 1px solid #edf0f6;
+}
+.assignment-form__actions p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+.assignment-form__actions .btn {
+    min-height: 46px;
+    padding: 0 20px;
+    border-radius: 10px;
+}
+
+@media (max-width: 980px) {
+    .assignment-form { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 680px) {
+    .assignment-edit-page .app-content { padding: 20px 16px 56px; }
+    .assignment-panel { border-radius: 14px; }
+    .assignment-panel .panel__head { align-items: flex-start; flex-direction: column; gap: 12px; padding: 20px 18px; }
+    .assignment-panel .role-badge { align-self: flex-start; }
+    .assignment-form { gap: 16px; padding: 18px; }
+    .assignment-row { padding: 14px; }
+    .assignment-row legend strong { font-size: 12px; }
+    .assignment-form__section-heading { margin-top: 2px; }
+    .assignment-matrix th:first-child,
+    .assignment-matrix td:first-child { width: 38%; }
+    .assignment-matrix th,
+    .assignment-matrix td { padding-right: 9px; padding-left: 9px; }
+    .assignment-matrix__select { padding-right: 7px; padding-left: 8px; font-size: 12px; }
+    .assignment-form__actions { align-items: stretch; flex-direction: column; gap: 12px; }
+    .assignment-form__actions .btn { width: 100%; }
+}
+
+@media (max-width: 420px) {
+    .assignment-context { align-items: flex-start; }
+    .assignment-context__label { flex-basis: 100%; width: fit-content; }
+    .assignment-context__separator { display: none; }
+    .assignment-form { padding: 14px; }
+    .assignment-row legend strong { flex-wrap: wrap; }
+    .assignment-matrix { font-size: 11px; }
+    .assignment-matrix th,
+    .assignment-matrix td { padding-right: 6px; padding-left: 6px; }
 }
 .auth-page {
     position: relative;
