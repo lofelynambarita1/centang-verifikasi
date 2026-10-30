@@ -12,6 +12,7 @@ class AuditSystemNotification extends Notification
         public readonly string $title,
         public readonly string $message,
         public readonly string $url,
+        public readonly bool $sendMail = true,
     ) {}
 
     /**
@@ -21,7 +22,7 @@ class AuditSystemNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        return $this->sendMail ? ['database', 'mail'] : ['database'];
     }
 
     /**

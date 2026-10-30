@@ -42,7 +42,7 @@ class AuditController extends Controller
         return view('audits.create', compact('companies', 'auditors', 'selectedCompanyId'));
     }
 
-    public function store(StoreAuditRequest $request): RedirectResponse
+    public function store(StoreAuditRequest $request, NotificationDispatcher $notifications): RedirectResponse
     {
         $validated = $request->validated();
         $company = Company::findOrFail($validated['company_id']);
@@ -89,6 +89,14 @@ class AuditController extends Controller
 
             return $audit;
         });
+
+        $notifications->broadcast(new AuditSystemNotification(
+            'audit_created',
+            'Audit baru dibuat',
+            "{$request->user()->name} membuat proyek audit {$audit->title} untuk {$company->name}.",
+            route('companies.show', $company, false),
+            sendMail: false,
+        ));
 
         return redirect()->route('audits.assignments.edit', $audit)
             ->with('success', "Proyek audit untuk {$company->name} berhasil dibuat. Silakan atur penugasan prinsip untuk tim auditor.");
@@ -186,6 +194,18 @@ class AuditController extends Controller
 
         $audit->loadMissing('company');
         $validated = $request->validated();
+        $previousLeadId = (int) ($audit->leadMember?->user_id ?? 0);
+        $previousMemberIds = AuditProjectMember::query()
+            ->where('audit_id', $audit->id)
+            ->orderBy('user_id')
+            ->pluck('user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        $previousAssignments = $audit->assignees()->get()
+            ->map(fn (User $user): string => $user->id.':'.$user->pivot->principle_number)
+            ->sort()
+            ->values()
+            ->all();
 
         // 1. Tentukan Lead Auditor proyek
         $leadAuditorId = null;
@@ -248,10 +268,6 @@ class AuditController extends Controller
             ->all();
 
         // 3. Kelola penugasan prinsip audit
-        $previousAssignments = $audit->assignees()->get()
-            ->map(fn (User $user): string => $user->id.':'.$user->pivot->principle_number)
-            ->all();
-
         $assignments = collect($validated['assignments'] ?? [])
             ->filter(fn (array $assignment): bool => ! empty($assignment['user_id']))
             ->filter(fn (array $assignment): bool => in_array((int) $assignment['user_id'], $currentProjectMemberIds, true))
@@ -262,14 +278,6 @@ class AuditController extends Controller
             ->values()
             ->all();
 
-        $newAssignments = collect($assignments)
-            ->reject(fn (array $assignment): bool => in_array(
-                $assignment['user_id'].':'.$assignment['principle_number'],
-                $previousAssignments,
-                true,
-            ))
-            ->groupBy('user_id');
-
         $audit->assignees()->detach();
         foreach ($assignments as $assignment) {
             $audit->assignees()->attach($assignment['user_id'], [
@@ -277,25 +285,29 @@ class AuditController extends Controller
             ]);
         }
 
-        // 4. Kirim notifikasi
-        $assignedUsers = User::query()
-            ->whereNull('requested_role')
-            ->whereIn('id', $newAssignments->keys())
-            ->get()
-            ->keyBy('id');
+        $currentMemberIds = AuditProjectMember::query()
+            ->where('audit_id', $audit->id)
+            ->orderBy('user_id')
+            ->pluck('user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        $currentAssignments = $audit->assignees()->get()
+            ->map(fn (User $user): string => $user->id.':'.$user->pivot->principle_number)
+            ->sort()
+            ->values()
+            ->all();
 
-        foreach ($newAssignments as $userId => $userAssignments) {
-            $user = $assignedUsers->get((int) $userId);
-            if (! $user) {
-                continue;
-            }
-
-            $principles = $userAssignments->pluck('principle_number')->unique()->sort()->values();
-            $notifications->send([$user], new AuditSystemNotification(
+        if (
+            $previousLeadId !== ($leadAuditorId ?? 0)
+            || $previousMemberIds !== $currentMemberIds
+            || $previousAssignments !== $currentAssignments
+        ) {
+            $notifications->broadcast(new AuditSystemNotification(
                 'principle_assignment',
-                'Penugasan prinsip baru',
-                "Anda ditugaskan pada Prinsip {$principles->join(', ')} untuk audit {$audit->company->name}.",
-                route('audits.show', ['audit' => $audit, 'page' => $principles->first()], false),
+                'Penugasan tim audit diperbarui',
+                "{$request->user()->name} memperbarui Lead Auditor, anggota tim, atau penanggung jawab prinsip untuk audit {$audit->company->name}.",
+                route('companies.show', $audit->company, false),
+                sendMail: false,
             ));
         }
 
@@ -311,21 +323,34 @@ class AuditController extends Controller
         abort_unless($request->user()?->canUpdateChecklist($auditItem), 403);
 
         $previousStatus = $auditItem->status;
+        $previousNote = $auditItem->note;
         $validated = $request->validated();
         $auditItem->update($validated);
         $audit = $auditItem->audit()->with('company')->firstOrFail();
         $audit->update(['status' => 'in_progress']);
 
-        if ($validated['status'] === 'non_compliant' && $previousStatus !== 'non_compliant') {
-            $this->notifyAuditManagers(
-                $notifications,
-                (int) $request->user()->getAuthIdentifier(),
-                $audit,
-                $auditItem,
-                'audit_finding',
-                'Temuan audit baru',
-                "{$request->user()->name} menandai indikator {$auditItem->title} sebagai Tidak Memenuhi di {$audit->company->name}.",
-            );
+        if ($auditItem->wasChanged(['status', 'note'])) {
+            $isNewFinding = $validated['status'] === 'non_compliant' && $previousStatus !== 'non_compliant';
+            $statusLabels = [
+                'compliant' => 'Memenuhi',
+                'non_compliant' => 'Tidak Memenuhi',
+                'not_applicable' => 'Tidak berlaku (NA)',
+            ];
+            $details = $isNewFinding
+                ? 'menandai sebagai Tidak Memenuhi'
+                : 'memperbarui hasil review menjadi '.($statusLabels[$auditItem->status] ?? $auditItem->status);
+
+            if ($previousNote !== $auditItem->note && filled($auditItem->note)) {
+                $details .= ' dan memperbarui catatan';
+            }
+
+            $notifications->broadcast(new AuditSystemNotification(
+                $isNewFinding ? 'audit_finding' : 'checklist_review_updated',
+                $isNewFinding ? 'Temuan audit baru' : 'Review checklist diperbarui',
+                "{$request->user()->name} {$details} untuk indikator {$auditItem->title} di {$audit->company->name}.",
+                route('companies.show', $audit->company, false),
+                sendMail: false,
+            ));
         }
 
         return redirect()->route('audits.show', [
@@ -334,12 +359,23 @@ class AuditController extends Controller
         ])->with('success', 'Hasil verifikasi tersimpan.');
     }
 
-    public function storeEvidence(Request $request, AuditItem $auditItem): RedirectResponse
-    {
+    public function storeEvidence(
+        Request $request,
+        AuditItem $auditItem,
+        NotificationDispatcher $notifications,
+    ): RedirectResponse {
         abort_unless($request->user()?->canWorkOn($auditItem), 403);
 
         $request->validate(['evidence' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240']]);
         $auditItem->update(['evidence_path' => $request->file('evidence')->store('audit-evidence', 'public')]);
+        $audit = $auditItem->audit()->with('company')->firstOrFail();
+        $notifications->broadcast(new AuditSystemNotification(
+            'audit_evidence_uploaded',
+            'Bukti audit diunggah',
+            "{$request->user()->name} mengunggah bukti untuk indikator {$auditItem->title} di {$audit->company->name}.",
+            route('companies.show', $audit->company, false),
+            sendMail: false,
+        ));
 
         return back()->with('success', 'Bukti pendukung berhasil diunggah.');
     }
@@ -362,24 +398,27 @@ class AuditController extends Controller
             'sort_order' => ((int) $auditItem->hasils()->max('sort_order')) + 1,
         ]);
         $audit->update(['status' => 'in_progress']);
-        $this->notifyAuditManagers(
-            $notifications,
-            (int) $request->user()->getAuthIdentifier(),
-            $audit,
-            $auditItem,
+        $notifications->broadcast(new AuditSystemNotification(
             'audit_result',
             'Hasil audit baru',
             "{$request->user()->name} menambahkan hasil untuk indikator {$auditItem->title} di {$audit->company->name}.",
-        );
+            route('companies.show', $audit->company, false),
+            sendMail: false,
+        ));
 
         return back()->with('success', 'Hasil audit ditambahkan dan tersimpan sebagai draft.');
     }
 
-    public function updateHasil(Request $request, AuditHasil $auditHasil): RedirectResponse
-    {
+    public function updateHasil(
+        Request $request,
+        AuditHasil $auditHasil,
+        NotificationDispatcher $notifications,
+    ): RedirectResponse {
         abort_unless($request->user()?->canWorkOn($auditHasil->auditItem), 403);
 
         $validated = $this->validateHasil($request);
+        $auditItem = $auditHasil->auditItem;
+        $audit = $auditItem->audit()->with('company')->firstOrFail();
 
         $auditHasil->update(['content' => $validated['content'] ?? null]);
 
@@ -391,16 +430,27 @@ class AuditController extends Controller
             $auditHasil->update(['evidence_path' => $request->file('evidence')->store('audit-evidence', 'public')]);
         }
 
-        $auditHasil->auditItem->audit()->update(['status' => 'in_progress']);
+        $audit->update(['status' => 'in_progress']);
+        $notifications->broadcast(new AuditSystemNotification(
+            'audit_result_updated',
+            'Hasil audit diperbarui',
+            "{$request->user()->name} memperbarui hasil untuk indikator {$auditItem->title} di {$audit->company->name}.",
+            route('companies.show', $audit->company, false),
+            sendMail: false,
+        ));
 
         return back()->with('success', 'Hasil audit tersimpan sebagai draft.');
     }
 
-    public function destroyHasil(AuditHasil $auditHasil): RedirectResponse
-    {
-        abort_unless(request()->user()?->canWorkOn($auditHasil->auditItem), 403);
+    public function destroyHasil(
+        Request $request,
+        AuditHasil $auditHasil,
+        NotificationDispatcher $notifications,
+    ): RedirectResponse {
+        abort_unless($request->user()?->canWorkOn($auditHasil->auditItem), 403);
 
         $audit = $auditHasil->auditItem->audit;
+        $auditItem = $auditHasil->auditItem;
 
         if ($auditHasil->evidence_path) {
             Storage::disk('public')->delete($auditHasil->evidence_path);
@@ -408,6 +458,14 @@ class AuditController extends Controller
 
         $auditHasil->delete();
         $audit->update(['status' => 'in_progress']);
+        $audit->loadMissing('company');
+        $notifications->broadcast(new AuditSystemNotification(
+            'audit_result_deleted',
+            'Hasil audit dihapus',
+            "{$request->user()->name} menghapus hasil untuk indikator {$auditItem->title} di {$audit->company->name}.",
+            route('companies.show', $audit->company, false),
+            sendMail: false,
+        ));
 
         return back()->with('success', 'Hasil audit dihapus.');
     }
@@ -423,38 +481,6 @@ class AuditController extends Controller
         ]);
     }
 
-    private function notifyAuditManagers(
-        NotificationDispatcher $notifications,
-        int $actorId,
-        Audit $audit,
-        AuditItem $auditItem,
-        string $event,
-        string $title,
-        string $message,
-    ): void {
-        $leadUser = $audit->leadMember?->user;
-        $recipients = User::query()
-            ->whereNull('requested_role')
-            ->whereIn('role', ['admin', 'lead_audit'])
-            ->where('id', '!=', $actorId)
-            ->get();
-
-        if ($leadUser && $leadUser->id !== $actorId && $leadUser->requested_role === null) {
-            $recipients->push($leadUser);
-            $recipients = $recipients->unique('id');
-        }
-
-        $notifications->send($recipients, new AuditSystemNotification(
-            $event,
-            $title,
-            $message,
-            route('audits.show', [
-                'audit' => $audit,
-                'page' => max(1, $auditItem->principleNumber()),
-            ], false),
-        ));
-    }
-
     public function complete(Audit $audit, NotificationDispatcher $notifications): RedirectResponse
     {
         abort_unless(auth()->user()?->isLeadAuditor($audit) || auth()->user()?->isAdmin(), 403, 'Hanya Lead Auditor atau Admin yang berhak menyelesaikan audit.');
@@ -464,26 +490,12 @@ class AuditController extends Controller
 
         $audit->update(['status' => 'completed', 'completed_at' => now()]);
 
-        $actorId = (int) auth()->id();
-        $leadUser = $audit->leadMember?->user;
-        $recipients = $audit->assignees()->whereNull('requested_role')->get()
-            ->merge(User::query()
-                ->whereNull('requested_role')
-                ->whereIn('role', ['admin', 'lead_audit'])
-                ->get());
-
-        if ($leadUser && $leadUser->requested_role === null) {
-            $recipients->push($leadUser);
-        }
-
-        $recipients = $recipients->unique('id')
-            ->reject(fn (User $user): bool => $user->id === $actorId);
-
-        $notifications->send($recipients, new AuditSystemNotification(
+        $notifications->broadcast(new AuditSystemNotification(
             'audit_completed',
             'Audit selesai',
-            "Audit {$audit->company->name} telah ditandai selesai.",
-            route('audits.show', ['audit' => $audit], false),
+            auth()->user()->name." menandai audit {$audit->company->name} sebagai selesai.",
+            route('companies.show', $audit->company, false),
+            sendMail: false,
         ));
 
         return back()->with('success', 'Audit berhasil diselesaikan dan siap dicetak.');
