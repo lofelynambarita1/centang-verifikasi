@@ -20,6 +20,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpWord\IOFactory;
@@ -175,6 +176,20 @@ class AuditController extends Controller
             'currentPage' => $currentPage,
             'canDownloadReport' => $canDownloadReport,
         ]);
+    }
+
+    public function updateSummary(Request $request, Audit $audit): RedirectResponse
+    {
+        Gate::authorize('update-audit-summary', $audit);
+
+        $validated = $request->validate([
+            'summary_notes' => ['nullable', 'string', 'max:10000'],
+        ]);
+
+        $audit->update(['summary_notes' => $validated['summary_notes'] ?? null]);
+
+        return redirect()->route('audits.show', $audit)
+            ->with('success', 'Ringkasan penilaian berhasil disimpan.');
     }
 
     public function assignPrinciples(
@@ -561,7 +576,7 @@ class AuditController extends Controller
             'principleAuditors' => $principleAuditors,
             'leadAuditor' => $leadAuditor,
             'assignedAuditorNames' => $assignedAuditorNames,
-        ])->setPaper('a4', 'portrait');
+        ])->setPaper('letter', 'portrait');
 
         $filename = 'laporan-verifikasi-ispo-'.Str::slug($audit->company->name).'.pdf';
 

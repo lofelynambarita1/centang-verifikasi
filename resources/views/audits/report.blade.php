@@ -9,11 +9,6 @@
 <body class="ispo-report-body">
     @php
         $items = $audit->items->sortBy('sort_order')->values();
-        $totalItems = $items->count();
-        $compliant = $items->where('status', 'compliant')->count();
-        $nonCompliant = $items->where('status', 'non_compliant')->count();
-        $notApplicable = $items->where('status', 'not_applicable')->count();
-        $verified = $compliant + $nonCompliant + $notApplicable;
         $principleTitles = config('ispo.principles', []);
         $criteriaMap = config('ispo.criteria', []);
         $logoPath = public_path('images/logo-gis-kop.jpg');
@@ -52,7 +47,7 @@
                 <img class="report-letterhead-image" src="{{ $logoDataUri }}" alt="Kop PT. Global Inspeksi Sertifikasi">
             </header>
         @else
-            <header class="ispo-report-header">
+            <header class="ispo-report-header ispo-report-header--fallback">
                 <div class="gis-logo" aria-label="GIS">
                     <span>GIS</span>
                 </div>
@@ -80,26 +75,17 @@
                 <h4>I. HASIL PENILAIAN</h4>
                 <h5>RINGKASAN PENILAIAN</h5>
                 <p>
-                    Dalam kegiatan penilaian/ audit ISPO Tahap 2 ini ditemukan beberapa ketidaksesuaian yang
-                    terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian
-                    Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha
-                    Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan
-                    kemudian saat ini pihak {{ $audit->company->name ?: 'perusahaan' }} telah melakukan tindakan
-                    perbaikan untuk pemenuhan ketidaksesuaian tersebut seluruhnya.
+                    @if (filled($audit->summary_notes))
+                        {!! nl2br(e($audit->summary_notes)) !!}
+                    @else
+                        Dalam kegiatan penilaian/ audit ISPO Tahap 2 ini ditemukan beberapa ketidaksesuaian yang
+                        terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian
+                        Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha
+                        Perkebunan Kelapa Sawit. Ketidaksesuaian tersebut dicatat dalam daftar untuk perbaikan, dan
+                        kemudian saat ini pihak {{ $audit->company->name ?: 'perusahaan' }} telah melakukan tindakan
+                        perbaikan untuk pemenuhan ketidaksesuaian tersebut seluruhnya.
+                    @endif
                 </p>
-                <p>
-                    Berikut ini merupakan ringkasan dari hasil penilaian yang dibuat berdasarkan Prinsip, Kriteria
-                    dan indikator ISPO seperti yang ditetapkan dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025
-                    tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit.
-                </p>
-            </div>
-
-            <div class="report-summary">
-                <div><span>Total indikator</span><strong>{{ $totalItems }}</strong></div>
-                <div><span>Memenuhi</span><strong>{{ $compliant }}</strong></div>
-                <div><span>Tidak memenuhi</span><strong>{{ $nonCompliant }}</strong></div>
-                <div><span>NA</span><strong>{{ $notApplicable }}</strong></div>
-                <div><span>Terisi</span><strong>{{ $verified }} / {{ $totalItems }}</strong></div>
             </div>
         </section>
 
@@ -152,7 +138,7 @@
                                 <div class="record-value">{!! nl2br(e($item->description ?: 'Tersedia dokumen dan bukti pendukung sesuai persyaratan.')) !!}</div>
                             </div>
                             <div class="record-row">
-                                <div class="record-label">Hasil Audit</div>
+                                <div class="record-label"><strong><u>Hasil Audit:</u></strong></div>
                                 <div class="record-value">
                                     @forelse ($item->hasils as $hasil)
                                         <p>{{ $hasil->content ?: '(tanpa keterangan)' }}</p>
@@ -176,7 +162,7 @@
                                 <div class="record-value">{{ $item->note ?: '-' }}</div>
                             </div>
                             <div class="record-row audit-result status-{{ $item->status }}">
-                                <div class="record-label">Status</div>
+                                <div class="record-label"><strong><u>Status :</u></strong></div>
                                 <div class="record-value"><strong>: {{ $statusLabels[$item->status] ?? 'Belum diperiksa' }}</strong></div>
                             </div>
                         </div>
@@ -209,10 +195,6 @@
             @endif
         </section>
 
-        <footer class="ispo-report-ending">
-            <p>Status audit: <strong>{{ $audit->status === 'completed' ? 'Selesai' : 'Belum selesai' }}</strong></p>
-            <p>Dokumen ini dibuat dari data verifikasi audit ISPO yang tersimpan dalam sistem.</p>
-        </footer>
     </main>
 </body>
 </html>

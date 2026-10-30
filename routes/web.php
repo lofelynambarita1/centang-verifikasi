@@ -41,6 +41,8 @@ Route::middleware('auth')->group(function (): void {
 
     Route::post('audits/{audit}/complete', [AuditController::class, 'complete'])
         ->name('audits.complete');
+    Route::put('audits/{audit}/summary', [AuditController::class, 'updateSummary'])
+        ->name('audits.summary.update');
 
     Route::put('audits/{audit}/assignments', [AuditController::class, 'assignPrinciples'])
         ->name('audits.assignments.update');

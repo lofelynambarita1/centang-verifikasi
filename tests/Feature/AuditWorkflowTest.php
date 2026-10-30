@@ -114,7 +114,10 @@ class AuditWorkflowTest extends TestCase
             ->assertSee('Indikator 7')
             ->assertSee('Parameter tujuh')
             ->assertSee('class="report-letterhead-image"', false)
-            ->assertSee('data:image/jpeg;base64,', false);
+            ->assertSee('data:image/jpeg;base64,', false)
+            ->assertDontSee('ispo-report-ending')
+            ->assertDontSee('Dokumen ini dibuat dari data verifikasi audit ISPO yang tersimpan dalam sistem.')
+            ->assertDontSee('Status audit:');
     }
 
     public function test_audit_report_and_show_display_only_the_five_standard_identity_rows(): void
@@ -160,8 +163,16 @@ class AuditWorkflowTest extends TestCase
 
     public function test_pdf_facts_table_contains_only_the_five_standard_rows(): void
     {
-        $company = Company::factory()->create();
-        $audit = $company->audits()->create(['title' => 'Audit pdf facts']);
+        $company = Company::factory()->create([
+            'name' => 'Perusahaan Contoh',
+            'address' => 'Jl. Contoh No. 1',
+        ]);
+        $audit = $company->audits()->create([
+            'title' => 'Audit pdf facts',
+            'auditor_name' => 'Auditor Contoh',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-01-07',
+        ]);
 
         $html = view('audits.pdf', [
             'audit' => $audit->load('company'),
@@ -169,6 +180,94 @@ class AuditWorkflowTest extends TestCase
             'isIspoChecklist' => false,
             'principles' => collect(),
         ])->render();
+
+        $this->assertStringContainsString(
+            "body { font-family: Arial, 'DejaVu Sans', sans-serif; font-size: 10pt; color: #000; line-height: 1.5; margin: 0; }",
+            $html,
+        );
+        $this->assertStringContainsString(
+            'body, body * { color: #000000 !important; border-color: #000000 !important; }',
+            $html,
+        );
+        $this->assertStringContainsString(
+            'h1.title { text-align: center; font-size: 13pt; font-weight: bold;',
+            $html,
+        );
+        $this->assertStringContainsString(
+            'h2.section { font-size: 12pt; font-weight: bold; text-transform: uppercase; color: #000000; margin: 18px 0 8px; }',
+            $html,
+        );
+        $this->assertStringContainsString(
+            '.section-summary-heading { font-size: 10.5pt; font-weight: bold; margin: 0 0 6px; }',
+            $html,
+        );
+        $this->assertStringContainsString('p { margin: 0 0 8px; text-align: justify; }', $html);
+        $this->assertStringContainsString(
+            '<p class="section-summary-heading">RINGKASAN PENILAIAN</p>',
+            $html,
+        );
+        $this->assertStringContainsString(
+            '.auditee { text-align: center; font-size: 11pt; font-weight: bold;',
+            $html,
+        );
+        $this->assertStringContainsString(
+            'table.facts { width: 100%; border: none; border-collapse: collapse; margin-bottom: 18px; font-size: 10pt; font-weight: normal;',
+            $html,
+        );
+        $this->assertStringContainsString('size: letter portrait;', $html);
+        $this->assertStringContainsString('margin-top: 2.54cm;', $html);
+        $this->assertStringContainsString('margin-bottom: 2.54cm;', $html);
+        $this->assertStringContainsString('margin-left: 2.54cm;', $html);
+        $this->assertStringContainsString('margin-right: 2.54cm;', $html);
+        $this->assertStringContainsString(
+            ".footer { position: fixed; bottom: -1.29cm; left: 0; right: 0; height: 1cm; font-family: Arial, 'DejaVu Sans', sans-serif; text-align: right; font-size: 8.5pt; color: #000000; }",
+            $html,
+        );
+        $this->assertStringContainsString(
+            '<div class="footer">FrO. 8603/GIS-1.1</div>',
+            $html,
+        );
+        $this->assertStringContainsString(
+            '.letterhead { width: 100%; margin-top: 0; margin-bottom: 20px; text-align: center; }',
+            $html,
+        );
+        $this->assertStringContainsString('.letterhead td { vertical-align: top; }', $html);
+        $this->assertStringContainsString('.results-letterhead td { vertical-align: top; }', $html);
+        $this->assertStringContainsString(
+            '.letterhead-image { display: block; width: 92%; max-width: 95%; height: auto; margin: 0 auto; }',
+            $html,
+        );
+        $this->assertStringNotContainsString('max-height: 75px', $html);
+        $this->assertStringNotContainsString('border-bottom: 3px solid #1b2450', $html);
+        $this->assertStringNotContainsString('border-bottom: 2px solid #1b2450', $html);
+        $this->assertStringContainsString(
+            '.auditee { text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 0 0 16px; }',
+            $html,
+        );
+        $this->assertStringContainsString('.facts-wrapper { padding-left: 24px; }', $html);
+        $this->assertStringContainsString(
+            'table.facts { width: 100%; border: none; border-collapse: collapse;',
+            $html,
+        );
+        $this->assertStringContainsString(
+            'table.facts td { padding: 2px 0; vertical-align: top; text-align: left; }',
+            $html,
+        );
+        $this->assertStringContainsString('table.facts td.k { width: 160px; font-weight: normal; }', $html);
+        $this->assertStringContainsString('table.facts td.s { width: 15px; text-align: left; }', $html);
+        $this->assertStringContainsString('.results-page { page-break-before: always; }', $html);
+        $this->assertStringContainsString(
+            'h2.results-title { font-size: 11pt; font-weight: bold; text-transform: uppercase; text-align: left; margin: 0 0 8px; }',
+            $html,
+        );
+        $this->assertStringContainsString(
+            'table.assessment-table { width: 100%; border-collapse: collapse; border: 1px solid #000000; font-size: 9.5pt; color: #000000; }',
+            $html,
+        );
+        $this->assertStringContainsString(
+            'table.assessment-table tr { page-break-inside: avoid; }',
+            $html,
+        );
 
         preg_match('/<table class="facts">(.*?)<\/table>/s', $html, $factsTable);
         $this->assertArrayHasKey(1, $factsTable);
@@ -182,6 +281,165 @@ class AuditWorkflowTest extends TestCase
             'Auditor',
             'Tanggal Audit',
         ], array_map(static fn (string $label): string => trim(strip_tags($label)), $labels[1]));
+        $this->assertStringContainsString('>(PERUSAHAAN CONTOH)</div>', $html);
+        $this->assertStringContainsString('Jl. Contoh No. 1', $factsTable[1]);
+        $this->assertStringContainsString('Auditor Contoh', $factsTable[1]);
+        $this->assertStringContainsString('01 Januari 2026 – 07 Januari 2026', $factsTable[1]);
+        $this->assertStringNotContainsString('class="signatures"', $html);
+        $this->assertStringNotContainsString('(Nama Pimpinan Perusahaan)', $html);
+        $this->assertStringNotContainsString('class="footer-note"', $html);
+        $this->assertStringNotContainsString('Dokumen ini dihasilkan otomatis dari data verifikasi audit ISPO', $html);
+    }
+
+    public function test_pdf_renders_assessment_items_as_a_two_column_hierarchical_table(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit assessment table']);
+        $item = $audit->items()->create([
+            'title' => '1.1.1 Izin lokasi dan KKPR',
+            'description' => "Memiliki izin lokasi.\nDokumen masih berlaku.",
+            'sort_order' => 1,
+            'status' => 'compliant',
+        ]);
+        $item->hasils()->create([
+            'content' => 'Dokumen telah diverifikasi.',
+            'evidence_path' => 'audits/evidence/izin.pdf',
+            'sort_order' => 0,
+        ]);
+
+        $html = view('audits.pdf', [
+            'audit' => $audit->load('company'),
+            'items' => $audit->items,
+            'isIspoChecklist' => true,
+            'principles' => collect([1 => collect([$item])]),
+        ])->render();
+
+        $resultsPage = substr($html, strpos($html, '<div class="results-page">'));
+
+        $this->assertStringContainsString('<img src="data:image/jpeg;base64,', $resultsPage);
+        $this->assertStringContainsString('<h2 class="results-title">HASIL VERIFIKASI PENILAIAN</h2>', $resultsPage);
+        $this->assertStringContainsString('<table class="assessment-table">', $resultsPage);
+        $this->assertStringContainsString('<td><strong>1.</strong></td>', $resultsPage);
+        $this->assertStringContainsString('<strong>KEPATUHAN TERHADAP PERATURAN PERUNDANGUNDANGAN</strong>', $resultsPage);
+        $this->assertStringContainsString('<td><strong>1.1</strong></td>', $resultsPage);
+        $this->assertStringContainsString('<strong>Izin Lokasi atau Kesesuaian Kegiatan Pemanfaatan Ruang</strong>', $resultsPage);
+        $this->assertStringContainsString('<td>1.1.1</td>', $resultsPage);
+        $this->assertStringContainsString('<td>Parameter</td>', $resultsPage);
+        $this->assertStringContainsString('<li>Memiliki izin lokasi.</li>', $resultsPage);
+        $this->assertStringContainsString('<li>Dokumen masih berlaku.</li>', $resultsPage);
+        $this->assertStringContainsString('<strong><u>Hasil Audit:</u></strong>', $resultsPage);
+        $this->assertStringContainsString('Dokumen telah diverifikasi.', $resultsPage);
+        $this->assertStringContainsString('Bukti: izin.pdf', $resultsPage);
+        $this->assertStringContainsString(
+            '<strong><u>Status :</u></strong> <strong>Memenuhi</strong>',
+            $resultsPage,
+        );
+    }
+
+    public function test_admin_and_project_lead_can_update_the_audit_summary(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit summary']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+        ]);
+        $summary = "Ringkasan dari admin.\nBaris kedua.";
+
+        $response = $this->from(route('audits.show', $audit))
+            ->put(route('audits.summary.update', $audit), ['summary_notes' => $summary])
+            ->assertRedirect(route('audits.show', $audit))
+            ->assertSessionHas('success');
+
+        $this->get($response->headers->get('Location'))->assertOk();
+        $this->assertSame($summary, $audit->fresh()->summary_notes);
+
+        $this->actingAs($lead)
+            ->from(route('audits.show', $audit))
+            ->put(route('audits.summary.update', $audit), ['summary_notes' => 'Ringkasan dari Lead Auditor.'])
+            ->assertRedirect(route('audits.show', $audit));
+
+        $this->assertSame('Ringkasan dari Lead Auditor.', $audit->fresh()->summary_notes);
+    }
+
+    public function test_only_admin_or_project_lead_can_view_and_update_the_audit_summary_form(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit summary authorization']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        $auditor = User::factory()->create(['role' => 'auditor']);
+        $outsider = User::factory()->create(['role' => 'auditor']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+        ]);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $auditor->id,
+            'project_role' => ProjectRole::Auditor->value,
+        ]);
+
+        $this->get(route('audits.show', $audit))
+            ->assertSee('Ringkasan Penilaian Lead Auditor')
+            ->assertSee('name="summary_notes"', false);
+
+        foreach ([$auditor, $outsider] as $unauthorizedUser) {
+            $this->actingAs($unauthorizedUser)
+                ->get(route('audits.show', $audit))
+                ->assertDontSee('name="summary_notes"', false);
+
+            $this->put(route('audits.summary.update', $audit), [
+                'summary_notes' => 'Tidak boleh disimpan.',
+            ])->assertForbidden();
+        }
+
+        $this->assertNull($audit->fresh()->summary_notes);
+    }
+
+    public function test_audit_reports_render_saved_summary_notes_as_escaped_multiline_text(): void
+    {
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create([
+            'title' => 'Audit PDF summary',
+            'summary_notes' => "Ringkasan <script>alert('x')</script>\nBaris kedua.",
+        ]);
+
+        $html = view('audits.pdf', [
+            'audit' => $audit->load('company'),
+            'items' => $audit->items,
+            'isIspoChecklist' => false,
+            'principles' => collect(),
+        ])->render();
+
+        $this->assertStringContainsString('Ringkasan &lt;script&gt;alert(&#039;x&#039;)&lt;/script&gt;', $html);
+        $this->assertStringContainsString('<br />', $html);
+        $this->assertStringNotContainsString('<script>alert(', $html);
+        $this->assertStringNotContainsString('Berikut ini merupakan ringkasan dari hasil penilaian', $html);
+        $this->assertStringNotContainsString('<table class="summary">', $html);
+        $this->assertStringNotContainsString('Total indikator', $html);
+        $this->assertStringContainsString('HASIL VERIFIKASI PENILAIAN', $html);
+
+        $this->get(route('audits.report', $audit))
+            ->assertOk()
+            ->assertSee('Ringkasan &lt;script&gt;alert(&#039;x&#039;)&lt;/script&gt;', false)
+            ->assertDontSee('<script>alert(', false)
+            ->assertDontSee('Berikut ini merupakan ringkasan dari hasil penilaian')
+            ->assertDontSee('Total indikator')
+            ->assertDontSee('class="report-summary"', false)
+            ->assertSee('HASIL VERIFIKASI PENILAIAN');
+
+        $reportStyles = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertSame(
+            1,
+            preg_match(
+                '/\.ispo-report-body, \.ispo-report-body \* \{\s*color: #000000 !important;\s*border-color: #000000 !important;\s*\}/',
+                $reportStyles,
+            ),
+        );
     }
 
     public function test_audit_views_offer_preview_and_download_pdf_actions(): void

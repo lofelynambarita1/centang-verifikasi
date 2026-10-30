@@ -18,7 +18,7 @@ class Audit extends Model
     use HasFactory;
 
     protected $fillable = [
-        'company_id', 'title', 'status', 'auditor_name', 'due_date', 'start_date', 'end_date', 'scope', 'completed_at',
+        'company_id', 'title', 'status', 'auditor_name', 'due_date', 'start_date', 'end_date', 'scope', 'summary_notes', 'completed_at',
     ];
 
     protected function casts(): array

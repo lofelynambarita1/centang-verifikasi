@@ -138,6 +138,33 @@
         </div>
     </section>
 
+    @can('update-audit-summary', $audit)
+        <section class="hero" aria-labelledby="audit-summary-notes-heading">
+            <div class="hero__head">
+                <div>
+                    <div class="hero__title" id="audit-summary-notes-heading">Ringkasan Penilaian Lead Auditor</div>
+                    <div class="hero__sub">Catatan ini akan ditampilkan pada laporan audit dan PDF.</div>
+                </div>
+            </div>
+            <div class="hero__body">
+                <form class="field--wide" method="POST" action="{{ route('audits.summary.update', $audit) }}">
+                    @csrf
+                    @method('PUT')
+                    <div class="field">
+                        <label for="summary_notes">Ringkasan Penilaian</label>
+                        <textarea class="note-box" id="summary_notes" name="summary_notes" rows="6" maxlength="10000" placeholder="Dalam kegiatan penilaian/ audit ISPO ini ditemukan beberapa ketidaksesuaian yang terkait dengan persyaratan yang ditetapkan oleh aturan ISPO dalam Peraturan Menteri Pertanian Nomor 33 Tahun 2025 tentang Sertifikasi Kelapa Sawit Berkelanjutan Indonesia terhadap Usaha Perkebunan Kelapa Sawit...">{{ old('summary_notes', $audit->summary_notes) }}</textarea>
+                        @error('summary_notes')
+                            <span class="form-error" role="alert">{{ $message }}</span>
+                        @enderror
+                    </div>
+                    <div class="hasil-actions">
+                        <button class="btn btn--primary" type="submit">Simpan Ringkasan</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    @endcan
+
     <div class="tabs" role="navigation" aria-label="Pilih prinsip">
         @if ($isIspoChecklist)
             @foreach ($principles as $principleNumber => $principleItems)
