@@ -66,8 +66,14 @@
             <div class="report-facts">
                 <div><span>Nama Perusahaan</span><b>:</b><strong>{{ $audit->company->name ?: '-' }}</strong></div>
                 <div><span>Alamat Perusahaan</span><b>:</b><strong>{{ $audit->company->address ?: '-' }}</strong></div>
-                <div><span>Luasan Lahan</span><b>:</b><strong>-</strong></div>
-                <div><span>Auditor</span><b>:</b><strong>{{ $leadAuditor?->name ?? $audit->auditor_name ?? '-' }}</strong></div>
+                <div><span>Luasan Lahan</span><b>:</b><strong>{{ $audit->company->land_area !== null ? number_format((float) $audit->company->land_area, 2, ',', '.') . ' Ha' : '-' }}</strong></div>
+                <div><span>Auditor</span><b>:</b><div>
+                        <div>Lead Auditor: {{ $leadAuditor?->name ?? $audit->auditor_name ?? '-' }}</div>
+                        @if ($teamAuditorNames->isNotEmpty())
+                            <div>Tim Auditor: {{ $teamAuditorNames->join(', ') }}</div>
+                        @endif
+                    </div>
+                </div>
                 <div><span>Tanggal Audit</span><b>:</b><strong>{{ $auditDate }}</strong></div>
             </div>
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Audit;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -14,7 +15,9 @@ class AssignAuditPrinciplesRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->canManageAssignments() ?? false;
+        $audit = $this->route('audit');
+
+        return $audit instanceof Audit && ($this->user()?->canManageAssignments($audit) ?? false);
     }
 
     /**

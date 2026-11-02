@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ProjectRole;
+use App\Models\AuditProjectMember;
 use App\Models\Company;
 use App\Models\User;
 use App\Notifications\AuditSystemNotification;
@@ -63,6 +65,11 @@ class AuditNotificationsTest extends TestCase
         $lead = User::factory()->create(['role' => 'lead_audit']);
         $auditor = User::factory()->create(['role' => 'auditor']);
         $audit = Company::factory()->create()->audits()->create(['title' => 'Audit penugasan']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+        ]);
         Notification::fake();
 
         $this->actingAs($lead)->put(route('audits.assignments.update', $audit), [

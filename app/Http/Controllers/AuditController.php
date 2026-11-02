@@ -150,7 +150,25 @@ class AuditController extends Controller
 
     public function show(Audit $audit): View
     {
-        $audit->load(['company', 'findings', 'assignees', 'leadMember.user']);
+        $audit->load(['company', 'findings', 'assignees', 'leadMember.user', 'members.user']);
+        $teamAuditorNames = $audit->members
+            ->reject(fn (AuditProjectMember $member): bool => $member->isLead())
+            ->map(fn (AuditProjectMember $member): ?string => $member->user?->name)
+            ->filter()
+            ->values();
+        $user = auth()->user();
+        $canEditAllItems = $user !== null && ($user->isAdmin() || $audit->userIsLead($user));
+        $editablePrinciples = $canEditAllItems || $user === null
+            ? collect()
+            : $audit->assignees()
+                ->whereKey($user->getKey())
+                ->pluck('principle_number')
+                ->map(fn ($number): int => (int) $number)
+                ->unique()
+                ->values();
+        $assigneesByPrinciple = $audit->assignees
+            ->groupBy(fn (User $assignee): int => (int) $assignee->pivot->principle_number)
+            ->map(fn ($assignees) => $assignees->pluck('name')->join(', '));
         $canDownloadReport = auth()->user() !== null && $audit->userCanAccessReport(auth()->user());
         $allItems = $audit->items()->with('hasils')->get();
         $isIspoChecklist = $allItems->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
@@ -175,6 +193,10 @@ class AuditController extends Controller
             'isIspoChecklist' => $isIspoChecklist,
             'currentPage' => $currentPage,
             'canDownloadReport' => $canDownloadReport,
+            'teamAuditorNames' => $teamAuditorNames,
+            'canEditAllItems' => $canEditAllItems,
+            'editablePrinciples' => $editablePrinciples,
+            'assigneesByPrinciple' => $assigneesByPrinciple,
         ]);
     }
 
@@ -508,15 +530,23 @@ class AuditController extends Controller
     {
         abort_unless(auth()->user() !== null && $audit->userCanAccessReport(auth()->user()), 403);
 
+        $audit->load([
+            'company',
+            'items.hasils',
+            'findings',
+            'assignees',
+            'leadMember.user',
+            'members.user',
+        ]);
+        $teamAuditorNames = $audit->members
+            ->reject(fn (AuditProjectMember $member): bool => $member->isLead())
+            ->map(fn (AuditProjectMember $member): ?string => $member->user?->name)
+            ->filter()
+            ->values();
+
         return view('audits.report', [
-            'audit' => $audit->load([
-                'company',
-                'items.hasils',
-                'findings',
-                'assignees',
-                'leadMember.user',
-                'members.user',
-            ]),
+            'audit' => $audit,
+            'teamAuditorNames' => $teamAuditorNames,
         ]);
     }
 
@@ -560,6 +590,11 @@ class AuditController extends Controller
                 ->values(),
         ]);
         $leadAuditor = $audit->leadMember?->user;
+        $teamAuditorNames = $audit->members
+            ->reject(fn (AuditProjectMember $member): bool => $member->isLead())
+            ->map(fn (AuditProjectMember $member): ?string => $member->user?->name)
+            ->filter()
+            ->values();
         $assignedAuditorNames = $audit->assignees
             ->reject(fn (User $user): bool => $leadAuditor !== null && $user->is($leadAuditor))
             ->pluck('name')
@@ -575,6 +610,7 @@ class AuditController extends Controller
             'principleSummaries' => $principleSummaries,
             'principleAuditors' => $principleAuditors,
             'leadAuditor' => $leadAuditor,
+            'teamAuditorNames' => $teamAuditorNames,
             'assignedAuditorNames' => $assignedAuditorNames,
         ])->setPaper('letter', 'portrait');
 

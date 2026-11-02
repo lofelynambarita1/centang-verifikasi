@@ -32,20 +32,9 @@ class CompanyController extends Controller
      */
     public function store(StoreCompanyRequest $request): RedirectResponse
     {
-<<<<<<< Updated upstream
-        Company::create($request->validated());
-=======
         abort_unless(auth()->user()?->isAdmin(), 403);
 
-        $company = Company::create($request->validated());
-        $notifications->broadcast(new AuditSystemNotification(
-            'company_created',
-            'Perusahaan baru ditambahkan',
-            "{$request->user()->name} menambahkan perusahaan {$company->name}.",
-            route('companies.show', $company, false),
-            sendMail: false,
-        ));
->>>>>>> Stashed changes
+        Company::create($request->validated());
 
         return redirect()->route('companies.index')->with('success', 'Data perusahaan berhasil disimpan.');
     }
@@ -71,18 +60,12 @@ class CompanyController extends Controller
     /**
      * Update the specified resource in storage.
      */
-<<<<<<< Updated upstream
-    public function update(StoreCompanyRequest $request, Company $company): RedirectResponse
-    {
-=======
     public function update(
         StoreCompanyRequest $request,
         Company $company,
-        NotificationDispatcher $notifications,
     ): RedirectResponse {
         abort_unless(auth()->user()?->isAdmin(), 403);
 
->>>>>>> Stashed changes
         $company->update($request->validated());
 
         return redirect()->route('companies.index')->with('success', 'Data perusahaan berhasil diperbarui.');
@@ -93,12 +76,8 @@ class CompanyController extends Controller
      */
     public function destroy(Company $company): RedirectResponse
     {
-<<<<<<< Updated upstream
-=======
         abort_unless(auth()->user()?->isAdmin(), 403);
 
-        $companyName = $company->name;
->>>>>>> Stashed changes
         $company->delete();
 
         return redirect()->route('companies.index')->with('success', 'Perusahaan dihapus.');

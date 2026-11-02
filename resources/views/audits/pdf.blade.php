@@ -55,6 +55,8 @@
     <div class="footer">FrO. 8603/GIS-1.1</div>
     @php
         $items = ($items ?? $audit->items)->sortBy('sort_order')->values();
+        $leadAuditor = $leadAuditor ?? $audit->leadMember?->user;
+        $teamAuditorNames = $teamAuditorNames ?? collect();
         $nonCompliant = $items->where('status', 'non_compliant')->count();
         $statusLabels = [
             'compliant' => 'Memenuhi',
@@ -99,8 +101,16 @@
         <table class="facts">
             <tr><td class="k">Nama Perusahaan</td><td class="s">:</td><td>{{ $audit->company->name ?: '-' }}</td></tr>
             <tr><td class="k">Alamat Perusahaan</td><td class="s">:</td><td>{{ $audit->company->address ?: '-' }}</td></tr>
-            <tr><td class="k">Luasan Lahan</td><td class="s">:</td><td>-</td></tr>
-            <tr><td class="k">Auditor</td><td class="s">:</td><td>{{ $audit->leadMember?->user?->name ?? $audit->auditor_name ?? '-' }}</td></tr>
+            <tr><td class="k">Luasan Lahan</td><td class="s">:</td><td>{{ $audit->company->land_area !== null ? number_format((float) $audit->company->land_area, 2, ',', '.') . ' Ha' : '-' }}</td></tr>
+            <tr>
+                <td class="k">Auditor</td><td class="s">:</td>
+                <td>
+                    <div><strong>Lead Auditor:</strong> {{ $leadAuditor?->name ?? $audit->auditor_name ?? '-' }}</div>
+                    @if (($teamAuditorNames ?? collect())->isNotEmpty())
+                        <div><strong>Tim Auditor:</strong> {{ $teamAuditorNames->join(', ') }}</div>
+                    @endif
+                </td>
+            </tr>
             <tr>
                 <td class="k">Tanggal Audit</td>
                 <td class="s">:</td>

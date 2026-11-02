@@ -15,6 +15,10 @@
         <textarea id="address" name="address" rows="3">{{ old('address', $company?->address) }}</textarea>
     </div>
     <div class="field">
+        <label for="land_area">Luasan lahan (Ha)</label>
+        <input id="land_area" type="number" name="land_area" min="0" step="0.01" value="{{ old('land_area', $company?->land_area) }}">
+    </div>
+    <div class="field">
         <label for="contact_name">Nama PIC</label>
         <input id="contact_name" name="contact_name" value="{{ old('contact_name', $company?->contact_name) }}">
     </div>

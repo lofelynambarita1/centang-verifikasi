@@ -286,6 +286,11 @@ class AuditTeamAssignmentWorkflowTest extends TestCase
         $auditorOne = User::factory()->create(['role' => 'auditor']);
         $auditorTwo = User::factory()->create(['role' => 'auditor']);
         $audit = Company::factory()->create()->audits()->create(['title' => 'Audit single assignee']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+        ]);
 
         $this->actingAs($lead)
             ->put(route('audits.assignments.update', $audit), [

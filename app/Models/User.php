@@ -100,7 +100,7 @@ class User extends Authenticatable
         }
 
         if ($audit !== null) {
-            return $audit->userIsLead($this) || $this->roleName() === 'lead_audit';
+            return $audit->userIsLead($this);
         }
 
         return $this->isLeadAuditor();
@@ -108,22 +108,22 @@ class User extends Authenticatable
 
     public function canWorkOn(AuditItem $auditItem): bool
     {
-        // Admin bertugas membuat proyek audit & menugaskan tim; Admin TIDAK mencentang checklist verifikasi
         if ($this->isAdmin()) {
-            return false;
+            return true;
         }
 
         $audit = $auditItem->audit;
 
-        // Lead auditor pada audit terkait berhak mengisi checklist verifikasi
-        if ($this->isLeadAuditor($audit)) {
+        if ($audit === null) {
+            return false;
+        }
+
+        if ($audit->userIsLead($this)) {
             return true;
         }
 
-        // Auditor anggota proyek berhak jika ditugaskan pada prinsip audit tersebut
-        return $this->audits()
-            ->where('audits.id', $auditItem->audit_id)
-            ->wherePivot('principle_number', $auditItem->principleNumber())
+        return $audit->assigneesForPrinciple($auditItem->principleNumber())
+            ->whereKey($this->getKey())
             ->exists();
     }
 

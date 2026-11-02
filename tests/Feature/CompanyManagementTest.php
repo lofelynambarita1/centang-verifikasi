@@ -31,6 +31,7 @@ class CompanyManagementTest extends TestCase
             ->assertSee('Alamat')
             ->assertSee('Nama PIC')
             ->assertSee('Email PIC')
+            ->assertSee('Luasan lahan (Ha)')
             ->assertSee('Simpan Perusahaan')
             ->assertDontSee('Nama auditor')
             ->assertDontSee('Deadline audit')
@@ -74,6 +75,7 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Sawit Sejahtera Bersama',
             'industry' => 'Perkebunan Kelapa Sawit',
             'address' => 'Jl. Kebun Indah KM 5',
+            'land_area' => '1250.50',
             'contact_name' => 'Ahmad Fauzi',
             'contact_email' => 'fauzi@sawitsejahtera.com',
         ]);
@@ -85,6 +87,7 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Sawit Sejahtera Bersama',
             'industry' => 'Perkebunan Kelapa Sawit',
             'address' => 'Jl. Kebun Indah KM 5',
+            'land_area' => '1250.50',
             'contact_name' => 'Ahmad Fauzi',
             'contact_email' => 'fauzi@sawitsejahtera.com',
         ]);
@@ -106,6 +109,7 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Baru Sukses Makmur',
             'industry' => 'Agribisnis Sawit',
             'address' => 'Jl. Poros Baru No. 8',
+            'land_area' => '250.75',
             'contact_name' => 'Rina Wijaya',
             'contact_email' => 'rina@barusukses.com',
         ]);
@@ -118,6 +122,7 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Baru Sukses Makmur',
             'industry' => 'Agribisnis Sawit',
             'address' => 'Jl. Poros Baru No. 8',
+            'land_area' => '250.75',
             'contact_name' => 'Rina Wijaya',
             'contact_email' => 'rina@barusukses.com',
         ]);

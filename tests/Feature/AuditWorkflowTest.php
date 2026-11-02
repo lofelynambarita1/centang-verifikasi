@@ -291,6 +291,66 @@ class AuditWorkflowTest extends TestCase
         $this->assertStringNotContainsString('Dokumen ini dihasilkan otomatis dari data verifikasi audit ISPO', $html);
     }
 
+    public function test_audit_identity_shows_land_area_and_project_team_consistently_in_web_and_pdf_views(): void
+    {
+        $company = Company::factory()->create([
+            'name' => 'PT Sawit Contoh',
+            'land_area' => '1250.50',
+        ]);
+        $lead = User::factory()->create(['role' => 'auditor', 'name' => 'Ani Auditor']);
+        $teamMemberOne = User::factory()->create(['role' => 'auditor', 'name' => 'Budi Auditor']);
+        $teamMemberTwo = User::factory()->create(['role' => 'auditor', 'name' => 'Citra Auditor']);
+        $audit = $company->audits()->create([
+            'title' => 'Audit identitas',
+            'auditor_name' => 'Auditor Lama',
+        ]);
+
+        foreach ([
+            [$lead, ProjectRole::LeadAudit],
+            [$teamMemberOne, ProjectRole::Auditor],
+            [$teamMemberTwo, ProjectRole::Auditor],
+        ] as [$user, $projectRole]) {
+            AuditProjectMember::create([
+                'audit_id' => $audit->id,
+                'user_id' => $user->id,
+                'project_role' => $projectRole->value,
+            ]);
+        }
+
+        $teamAuditorNames = collect(['Budi Auditor', 'Citra Auditor']);
+        $expectedIdentity = [
+            '1.250,50 Ha',
+            'Lead Auditor:',
+            'Ani Auditor',
+            'Tim Auditor:',
+            'Budi Auditor, Citra Auditor',
+        ];
+
+        foreach (['audits.show', 'audits.report'] as $viewRoute) {
+            $content = $this->get(route($viewRoute, $audit))
+                ->assertOk()
+                ->getContent();
+
+            foreach ($expectedIdentity as $text) {
+                $this->assertStringContainsString($text, $content);
+            }
+        }
+
+        $audit->load(['company', 'items.hasils', 'findings', 'assignees', 'leadMember.user', 'members.user']);
+        $pdfHtml = view('audits.pdf', [
+            'audit' => $audit,
+            'items' => $audit->items,
+            'isIspoChecklist' => false,
+            'principles' => collect(),
+            'leadAuditor' => $lead,
+            'teamAuditorNames' => $teamAuditorNames,
+        ])->render();
+
+        foreach ($expectedIdentity as $text) {
+            $this->assertStringContainsString($text, $pdfHtml);
+        }
+    }
+
     public function test_pdf_renders_assessment_items_as_a_two_column_hierarchical_table(): void
     {
         $company = Company::factory()->create();

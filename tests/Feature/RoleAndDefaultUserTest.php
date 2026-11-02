@@ -189,7 +189,7 @@ class RoleAndDefaultUserTest extends TestCase
         $this->post(route('audits.complete', $audit))->assertRedirect(route('login'));
     }
 
-    public function test_admin_cannot_update_checklist_verification(): void
+    public function test_admin_can_update_checklist_verification(): void
     {
         $company = Company::factory()->create();
         $audit = $company->audits()->create(['title' => 'Audit Checklist']);
@@ -197,10 +197,14 @@ class RoleAndDefaultUserTest extends TestCase
 
         $admin = User::factory()->create(['role' => 'admin']);
 
-        // Admin dilarang mencentang / mengisi checklist verifikasi
         $this->actingAs($admin)
             ->put(route('audit-items.update', $item), ['status' => 'compliant'])
-            ->assertForbidden();
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('audit_items', [
+            'id' => $item->id,
+            'status' => 'compliant',
+        ]);
     }
 
     public function test_verification_and_completion_authorization_based_on_audit_project_member(): void
@@ -214,6 +218,7 @@ class RoleAndDefaultUserTest extends TestCase
         $lead = User::factory()->create(['role' => 'auditor']);
         $memberAuditor = User::factory()->create(['role' => 'auditor']);
         $outsider = User::factory()->create(['role' => 'auditor']);
+        $leadOnAnotherProject = User::factory()->create(['role' => 'lead_audit']);
 
         // Admin menugaskan lead_audit dan auditor via AuditProjectMember
         AuditProjectMember::create([
@@ -239,16 +244,19 @@ class RoleAndDefaultUserTest extends TestCase
         $this->assertFalse($admin->isLeadAuditor($audit));
 
         // 2. Checklist verification rights (canWorkOn / updateItem)
-        // Admin dilarang mengisi checklist
         $this->actingAs($admin)
             ->put(route('audit-items.update', $item1), ['status' => 'compliant'])
-            ->assertForbidden();
+            ->assertRedirect();
+        $this->assertSame('compliant', $item1->fresh()->status);
 
         // Lead auditor proyek berhak mengisi checklist
         $this->actingAs($lead)
             ->put(route('audit-items.update', $item1), ['status' => 'compliant'])
             ->assertRedirect();
         $this->assertSame('compliant', $item1->fresh()->status);
+        $this->put(route('audit-items.update', $item2), ['status' => 'compliant'])
+            ->assertRedirect();
+        $this->assertSame('compliant', $item2->fresh()->status);
 
         // Auditor anggota proyek hanya berhak mengisi prinsip yang ditugaskan (prinsip 1)
         $this->actingAs($memberAuditor)
@@ -265,10 +273,11 @@ class RoleAndDefaultUserTest extends TestCase
             ->put(route('audit-items.update', $item1), ['status' => 'compliant'])
             ->assertForbidden();
 
-        // 3. Finalization rights (complete)
-        // Tandai semua item selesai agar audit valid untuk difinalisasi
-        $item2->update(['status' => 'compliant']);
+        $this->actingAs($leadOnAnotherProject)
+            ->put(route('audit-items.update', $item1), ['status' => 'compliant'])
+            ->assertForbidden();
 
+        // 3. Finalization rights (complete)
         // Auditor biasa dilarang finalisasi
         $this->actingAs($memberAuditor)
             ->post(route('audits.complete', $audit))

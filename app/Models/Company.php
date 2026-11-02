@@ -13,7 +13,7 @@ class Company extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name', 'industry', 'address', 'contact_name', 'contact_email',
+        'name', 'industry', 'address', 'land_area', 'contact_name', 'contact_email',
     ];
 
     public function audits(): HasMany

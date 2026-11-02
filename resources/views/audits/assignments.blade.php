@@ -71,7 +71,9 @@
                             <td>
                                 <div class="cell-actions">
                                     <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', $audit) }}">Buka Checklist</a>
-                                    <a class="btn btn--primary btn--sm" href="{{ route('audits.assignments.edit', $audit) }}">Atur Tim/Penugasan</a>
+                                    @if (auth()->user()?->canManageAssignments($audit))
+                                        <a class="btn btn--primary btn--sm" href="{{ route('audits.assignments.edit', $audit) }}">Atur Tim/Penugasan</a>
+                                    @endif
                                     <a class="btn btn--ghost btn--sm" href="{{ route('audits.report', $audit) }}">Laporan</a>
                                 </div>
                             </td>
