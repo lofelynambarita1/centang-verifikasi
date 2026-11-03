@@ -199,14 +199,58 @@ img, svg { vertical-align: middle; }
 .app-topbar__actions--right {
     margin-left: auto;
 }
+.app-topbar__controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 14px;
+    min-width: 0;
+}
 .profile-menu {
-    position: fixed;
-    right: 20px;
-    bottom: 18px;
+    position: relative;
     z-index: 50;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+}
+.notification-bell {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    border: 1px solid rgba(52, 103, 194, 0.4);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.82);
+    color: #2e426b;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.notification-bell svg { width: 21px; height: 21px; }
+.notification-bell:hover,
+.notification-bell.active {
+    border-color: #314c9a;
+    background: #eaf0ff;
+    color: #263d82;
+}
+.notification-bell__badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border: 2px solid #f3f4f6;
+    border-radius: 999px;
+    background: #d63d2f;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
 }
 .profile-pill {
     display: inline-flex;
@@ -251,6 +295,9 @@ img, svg { vertical-align: middle; }
     text-transform: capitalize;
 }
 .profile-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
     margin-top: 10px;
     width: 180px;
     display: grid;
@@ -1350,9 +1397,9 @@ img, svg { vertical-align: middle; }
     .app-nav__link span { display: none; }
     .app-nav__link { padding: 11px; }
     .app-topbar { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 18px; }
-    .app-topbar__actions { width: 100%; justify-content: flex-start; }
+    .app-topbar__controls { width: 100%; justify-content: space-between; gap: 10px; }
+    .app-topbar__actions { flex: 1 1 auto; justify-content: flex-start; }
     .app-topbar__actions .btn { flex: 1 1 auto; }
-    .topbar-user { width: 100%; }
     .app-topbar h1 { font-size: 20px; }
     .stat-grid { gap: 10px; }
     .stat-card { min-height: 150px; padding: 16px; }

@@ -33,16 +33,6 @@
                 </svg>
                 <span>Perusahaan</span>
             </a>
-            <a class="app-nav__link @if (request()->routeIs('notifications.*')) active @endif" href="{{ route('notifications.index') }}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/>
-                    <path d="M10 21h4"/>
-                </svg>
-                <span>Notifikasi</span>
-                @if ($unreadNotificationCount > 0)
-                    <span class="app-nav__badge">{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
-                @endif
-            </a>
             @if (auth()->user()?->canManageAssignments())
                 <a class="app-nav__link @if (request()->routeIs('audits.assignments.*')) active @endif" href="{{ route('audits.assignments.index') }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -81,7 +71,40 @@
                 <p class="app-eyebrow">@yield('eyebrow', 'VERIFIKASI AUDIT ISPO')</p>
                 <h1>@yield('heading', 'Dashboard')</h1>
             </div>
-            @yield('actions')
+            <div class="app-topbar__controls">
+                <div class="app-topbar__actions">@yield('actions')</div>
+                @auth
+                    <a class="notification-bell @if (request()->routeIs('notifications.*')) active @endif"
+                       href="{{ route('notifications.index') }}"
+                       aria-label="Notifikasi, {{ $unreadNotificationCount }} belum dibaca">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/>
+                            <path d="M10 21h4"/>
+                        </svg>
+                        @if ($unreadNotificationCount > 0)
+                            <span class="notification-bell__badge" aria-hidden="true">{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
+                        @endif
+                    </a>
+
+                    <div class="profile-menu" data-profile-menu>
+                        <button class="profile-pill" type="button" aria-expanded="false" aria-controls="profile-dropdown" aria-label="Profil pengguna">
+                            <span class="profile-pill__avatar">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
+                            <div class="profile-pill__meta">
+                                <strong>{{ auth()->user()->name }}</strong>
+                                <span>{{ str_replace('_', ' ', ucfirst(auth()->user()->role)) }}</span>
+                            </div>
+                        </button>
+
+                        <div class="profile-dropdown" id="profile-dropdown" hidden>
+                            <a href="{{ route('dashboard') }}" class="profile-dropdown__item">Masuk</a>
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="profile-dropdown__item profile-dropdown__item--danger">Keluar</button>
+                            </form>
+                        </div>
+                    </div>
+                @endauth
+            </div>
         </header>
 
         <main class="app-content">
@@ -92,26 +115,6 @@
         </main>
     </div>
 </div>
-
-@auth
-    <div class="profile-menu" data-profile-menu>
-        <button class="profile-pill" type="button" aria-expanded="false" aria-controls="profile-dropdown" aria-label="Profil pengguna">
-            <span class="profile-pill__avatar">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
-            <div class="profile-pill__meta">
-                <strong>{{ auth()->user()->name }}</strong>
-                <span>{{ str_replace('_', ' ', ucfirst(auth()->user()->role)) }}</span>
-            </div>
-        </button>
-
-        <div class="profile-dropdown" id="profile-dropdown" hidden>
-            <a href="{{ route('dashboard') }}" class="profile-dropdown__item">Masuk</a>
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit" class="profile-dropdown__item profile-dropdown__item--danger">Keluar</button>
-            </form>
-        </div>
-    </div>
-@endauth
 
 @stack('scripts')
 <script>

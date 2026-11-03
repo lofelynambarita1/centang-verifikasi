@@ -31,7 +31,10 @@ class AuditNotificationsTest extends TestCase
             ->get(route('notifications.index'))
             ->assertOk()
             ->assertSee('Hasil audit baru')
-            ->assertSee('app-nav__badge', false);
+            ->assertSee('notification-bell', false)
+            ->assertSee('notification-bell__badge', false)
+            ->assertSee('href="'.route('notifications.index').'"', false)
+            ->assertDontSee('app-nav__badge', false);
 
         $this->actingAs($otherUser)
             ->post(route('notifications.read', $notification->id))
