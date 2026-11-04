@@ -199,6 +199,115 @@ img, svg { vertical-align: middle; }
 .app-topbar__actions--right {
     margin-left: auto;
 }
+.app-topbar__tools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+}
+.app-notification-menu { position: relative; flex: 0 0 auto; }
+.app-notification-trigger {
+    position: relative;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border: 1px solid #dce3f0;
+    border-radius: 13px;
+    background: rgba(255,255,255,.9);
+    color: #435274;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.app-notification-trigger:hover,
+.app-notification-trigger[aria-expanded="true"] { border-color: #b9c9ed; background: #f5f7ff; color: #3154b3; }
+.app-notification-trigger svg { width: 21px; height: 21px; }
+.app-notification__badge {
+    position: absolute;
+    top: -6px;
+    right: -7px;
+    display: grid;
+    min-width: 19px;
+    height: 19px;
+    place-items: center;
+    padding: 0 5px;
+    border: 2px solid #f3f4f6;
+    border-radius: 999px;
+    background: #d94b43;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+}
+.app-notification-dropdown {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    z-index: 100;
+    width: min(390px, calc(100vw - 32px));
+    overflow: hidden;
+    border: 1px solid #dce3ef;
+    border-radius: 15px;
+    background: #fff;
+    box-shadow: 0 20px 50px -22px rgba(24, 35, 75, .48);
+}
+.app-notification-dropdown__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 15px 16px;
+    border-bottom: 1px solid #edf0f5;
+}
+.app-notification-dropdown__header > div { display: grid; gap: 2px; }
+.app-notification-dropdown__header strong { color: var(--text); font-size: 14px; }
+.app-notification-dropdown__header span { color: var(--quiet); font-size: 11px; }
+.app-notification-dropdown__header form { margin: 0; }
+.app-notification-dropdown__header button {
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: #f0f4fc;
+    color: #3154b3;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 800;
+}
+.app-notification-dropdown__list { display: grid; max-height: min(390px, 55vh); overflow-y: auto; }
+.app-notification-entry { margin: 0; border-bottom: 1px solid #f0f2f6; }
+.app-notification-entry:last-child { border-bottom: 0; }
+.app-notification-entry__button {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 9px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 13px 15px;
+    border: 0;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+}
+.app-notification-entry__button:hover { background: #f8faff; }
+.app-notification-entry--unread .app-notification-entry__button { background: #f5f8ff; }
+.app-notification-entry__dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: transparent; }
+.app-notification-entry--unread .app-notification-entry__dot { background: #4164c8; }
+.app-notification-entry__content { display: grid; min-width: 0; gap: 4px; }
+.app-notification-entry__content strong { color: var(--text); font-size: 12px; line-height: 1.4; }
+.app-notification-entry__content > span { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.app-notification-entry__content time { color: var(--quiet); font-size: 10px; }
+.app-notification-dropdown__empty { margin: 0; padding: 24px 16px; color: var(--quiet); font-size: 12px; text-align: center; }
+.app-notification-dropdown__footer {
+    display: block;
+    padding: 12px 16px;
+    border-top: 1px solid #edf0f5;
+    color: #3154b3;
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+    text-decoration: none;
+}
+.app-notification-dropdown__footer:hover { background: #f8faff; }
 .profile-menu {
     position: fixed;
     right: 20px;
@@ -865,6 +974,89 @@ img, svg { vertical-align: middle; }
    ===================================================================== */
 .alert { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 10px; font-size: 14.5px; font-weight: 600; margin-bottom: 22px; }
 .alert--success { background: var(--success-bg); color: var(--success); border: 1px solid #bde3d3; }
+.toast-stack {
+    position: fixed;
+    z-index: 2000;
+    top: 18px;
+    right: 20px;
+    display: grid;
+    width: min(410px, calc(100vw - 40px));
+    gap: 10px;
+    pointer-events: none;
+}
+.app-toast {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 28px;
+    align-items: start;
+    gap: 12px;
+    padding: 15px;
+    border: 1px solid #dce5f2;
+    border-left: 4px solid #4164c8;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .98);
+    box-shadow: 0 18px 48px -20px rgba(27, 38, 79, .55);
+    color: var(--text);
+    pointer-events: auto;
+    animation: app-toast-in .28s ease-out both;
+    transition: opacity .2s ease, transform .2s ease;
+}
+.app-toast--success { border-left-color: #17865c; }
+.app-toast--deadline { border-left-color: #d29a22; }
+.app-toast--overdue { border-color: #f0d2cf; border-left-color: #d64b42; }
+.app-toast__icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 11px;
+    background: #edf2ff;
+    color: #3558b5;
+}
+.app-toast__icon svg { width: 19px; height: 19px; }
+.app-toast--success .app-toast__icon { background: #e8f6ef; color: #17865c; }
+.app-toast--deadline .app-toast__icon { background: #fff6df; color: #a87309; }
+.app-toast--overdue .app-toast__icon { background: #fff0ee; color: #c33f36; }
+.app-toast__body { display: grid; min-width: 0; gap: 4px; }
+.app-toast__body > strong { color: var(--text); font-size: 13px; line-height: 1.4; }
+.app-toast__body p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.app-toast__eyebrow { color: #936c18; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.app-toast--overdue .app-toast__eyebrow { color: #bd4038; }
+.app-toast__detail { color: var(--muted); font-size: 11px; font-weight: 700; line-height: 1.5; }
+.app-toast__link { width: fit-content; margin-top: 3px; color: #3154b3; font-size: 11px; font-weight: 800; text-decoration: none; }
+.app-toast__link:hover { color: #203d8e; text-decoration: underline; }
+.app-toast__close {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #77819a;
+    cursor: pointer;
+    font-size: 21px;
+    line-height: 1;
+}
+.app-toast__close:hover { background: #f0f3f8; color: #303b5a; }
+.app-toast--dismissed { opacity: 0; transform: translateX(14px); }
+@keyframes app-toast-in {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 560px) {
+    .toast-stack {
+        top: max(10px, env(safe-area-inset-top));
+        right: 12px;
+        left: 12px;
+        width: auto;
+    }
+    .app-toast { grid-template-columns: 34px minmax(0, 1fr) 26px; gap: 10px; padding: 13px; }
+    .app-toast__icon { width: 34px; height: 34px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .app-toast { animation: none; transition: none; }
+}
 
 /* =====================================================================
    FORMS
@@ -1830,8 +2022,11 @@ img, svg { vertical-align: middle; }
     .app-nav__link span { display: none; }
     .app-nav__link { padding: 11px; }
     .app-topbar { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 18px; }
-    .app-topbar__actions { width: 100%; justify-content: flex-start; }
+    .app-topbar__tools { width: 100%; justify-content: space-between; }
+    .app-topbar__tools > .app-topbar__actions { width: auto; flex: 1; justify-content: flex-end; }
+    .app-topbar__actions { justify-content: flex-end; }
     .app-topbar__actions .btn { flex: 1 1 auto; }
+    .app-notification-dropdown { right: 0; width: min(390px, calc(100vw - 56px)); }
     .topbar-user { width: 100%; }
     .app-topbar h1 { font-size: 20px; }
     .stat-grid { gap: 10px; }

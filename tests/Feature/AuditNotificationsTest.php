@@ -31,7 +31,11 @@ class AuditNotificationsTest extends TestCase
             ->get(route('notifications.index'))
             ->assertOk()
             ->assertSee('Hasil audit baru')
-            ->assertSee('app-nav__badge', false);
+            ->assertSee('app-notification__badge', false)
+            ->assertSee('data-notification-menu', false)
+            ->assertSee('Hasil baru tersedia untuk audit PT Contoh.')
+            ->assertSee('Lihat semua aktivitas')
+            ->assertDontSee('<span>Notifikasi</span>', false);
 
         $this->actingAs($otherUser)
             ->post(route('notifications.read', $notification->id))
@@ -301,5 +305,55 @@ class AuditNotificationsTest extends TestCase
             ->assertSee('Total aktivitas')
             ->assertSee('Belum ada aktivitas')
             ->assertSee('review checklist');
+    }
+
+    public function test_active_audit_deadline_appears_as_a_top_notification(): void
+    {
+        $this->travelTo(now()->setTime(10, 0));
+        $user = User::factory()->create(['role' => 'auditor']);
+        $company = Company::factory()->create(['name' => 'PT Tenggat ISPO']);
+        $audit = $company->audits()->create([
+            'title' => 'Pengisian checklist ISPO',
+            'status' => 'pending',
+            'due_date' => now()->addDays(3)->toDateString(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertSee('PENGINGAT DEADLINE ISPO')
+            ->assertSee('PT Tenggat ISPO')
+            ->assertSee('Pengisian checklist ISPO')
+            ->assertSee('Deadline 3 hari lagi')
+            ->assertSee(route('audits.show', $audit, false));
+    }
+
+    public function test_overdue_audits_are_notified_but_completed_or_distant_audits_are_not(): void
+    {
+        $this->travelTo(now()->setTime(10, 0));
+        $user = User::factory()->create(['role' => 'auditor']);
+        $company = Company::factory()->create(['name' => 'PT Pengisian ISPO']);
+        $company->audits()->create([
+            'title' => 'Checklist yang terlambat',
+            'status' => 'in_progress',
+            'due_date' => now()->subDay()->toDateString(),
+        ]);
+        $company->audits()->create([
+            'title' => 'Checklist yang sudah selesai',
+            'status' => 'completed',
+            'due_date' => now()->subDay()->toDateString(),
+        ]);
+        $company->audits()->create([
+            'title' => 'Checklist dengan tenggat mendatang',
+            'status' => 'pending',
+            'due_date' => now()->addDays(8)->toDateString(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('notifications.index'))
+            ->assertSee('TENGGAT TERLEWAT')
+            ->assertSee('Checklist yang terlambat')
+            ->assertSee('Terlambat 1 hari')
+            ->assertDontSee('Checklist yang sudah selesai')
+            ->assertDontSee('Checklist dengan tenggat mendatang');
     }
 }

@@ -40,7 +40,7 @@
             <div class="notification-overview__copy">
                 <span class="notification-overview__eyebrow">Aktivitas sistem</span>
                 <h2>Semua kabar penting, dalam satu tempat</h2>
-                <p>Perubahan perusahaan, audit, penugasan tim, review checklist, dan pengguna dicatat di sini untuk semua pengguna.</p>
+                <p>Perubahan perusahaan, audit, penugasan tim, review checklist, pengguna, serta pengingat deadline pengisian ISPO tersedia di sini.</p>
             </div>
             <div class="notification-overview__stats">
                 <div>
@@ -101,7 +101,7 @@
                         </svg>
                     </span>
                     <h3>Belum ada aktivitas</h3>
-                    <p>Notifikasi akan muncul saat data perusahaan, audit, penugasan, review checklist, atau pengguna berubah.</p>
+                    <p>Notifikasi muncul saat aktivitas sistem berubah. Pengingat deadline dan keterlambatan pengisian ISPO akan tampil otomatis.</p>
                 </div>
             @endforelse
         </section>
