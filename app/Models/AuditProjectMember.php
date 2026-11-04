@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ProjectRole;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,9 @@ class AuditProjectMember extends Model
         'user_id',
         'project_role',
         'added_by',
+        'deadline_at',
+        'first_submitted_at',
+        'last_submitted_at',
     ];
 
     protected static function booted(): void
@@ -34,7 +38,20 @@ class AuditProjectMember extends Model
     {
         return [
             'project_role' => ProjectRole::class,
+            'deadline_at' => 'datetime',
+            'first_submitted_at' => 'datetime',
+            'last_submitted_at' => 'datetime',
         ];
+    }
+
+    public function isLate(string $auditStatus, ?CarbonInterface $now = null): bool
+    {
+        if ($this->deadline_at === null) {
+            return false;
+        }
+
+        return ($this->last_submitted_at !== null && $this->last_submitted_at->greaterThan($this->deadline_at))
+            || ($auditStatus !== 'completed' && ($now ?? now())->greaterThan($this->deadline_at));
     }
 
     public function audit(): BelongsTo

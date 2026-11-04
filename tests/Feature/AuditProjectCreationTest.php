@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\IspoChecklist;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AuditProjectCreationTest extends TestCase
@@ -37,7 +38,14 @@ class AuditProjectCreationTest extends TestCase
             ->assertSee('name="company_id"', false)
             ->assertSee('name="start_date"', false)
             ->assertSee('name="end_date"', false)
-            ->assertSee('name="scope"', false)
+            ->assertSee('name="scope_category"', false)
+            ->assertSee('name="scope_detail"', false)
+            ->assertSee('Hulu')
+            ->assertSee('Hilir')
+            ->assertSee('Bioenergi')
+            ->assertSee('Kebun Sawit')
+            ->assertSee('PKS / Pabrik')
+            ->assertSee('Integrasi (Kebun & PKS)', false)
             ->assertSee('name="lead_auditor_id"', false);
     }
 
@@ -112,6 +120,8 @@ class AuditProjectCreationTest extends TestCase
             ->assertSee('Surveillance 1')
             ->assertSee('Dina Lead')
             ->assertSee('Rudi Auditor')
+            ->assertSee('Detail Tim & Deadline')
+            ->assertSee('<details class="audit-team-details">', false)
             ->assertSee('2025')
             ->assertSee('<strong>1</strong> / 2 Indikator Selesai', false)
             ->assertSee('50%')
@@ -123,8 +133,12 @@ class AuditProjectCreationTest extends TestCase
             ->assertSee(route('audits.report', $audit), false);
     }
 
-    public function test_admin_can_create_a_new_audit_project_with_lead_auditor_and_ispo_checklist(): void
-    {
+    #[DataProvider('validScopeSelections')]
+    public function test_admin_can_create_audit_project_with_a_valid_scope(
+        string $scopeCategory,
+        ?string $scopeDetail,
+        string $expectedScope,
+    ): void {
         $admin = User::factory()->create(['role' => 'admin']);
         $lead = User::factory()->create(['role' => 'auditor', 'name' => 'Lead Auditor Utama']);
         $company = Company::factory()->create(['name' => 'PT Sawit Makmur Jaya']);
@@ -132,14 +146,19 @@ class AuditProjectCreationTest extends TestCase
         $startDate = now()->addDays(2)->format('Y-m-d');
         $endDate = now()->addDays(9)->format('Y-m-d');
 
-        $response = $this->actingAs($admin)->post(route('audits.store'), [
+        $payload = [
             'company_id' => $company->id,
             'title' => 'Surveillance 1',
             'start_date' => $startDate,
             'end_date' => $endDate,
-            'scope' => 'Standar ISPO',
+            'scope_category' => $scopeCategory,
             'lead_auditor_id' => $lead->id,
-        ]);
+        ];
+        if ($scopeDetail !== null) {
+            $payload['scope_detail'] = $scopeDetail;
+        }
+
+        $response = $this->actingAs($admin)->post(route('audits.store'), $payload);
 
         $audit = Audit::where('company_id', $company->id)->latest()->firstOrFail();
 
@@ -153,7 +172,7 @@ class AuditProjectCreationTest extends TestCase
         $this->assertSame($startDate, $audit->start_date->format('Y-m-d'));
         $this->assertSame($endDate, $audit->end_date->format('Y-m-d'));
         $this->assertSame($endDate, $audit->due_date->format('Y-m-d'));
-        $this->assertSame('Standar ISPO', $audit->scope);
+        $this->assertSame($expectedScope, $audit->scope);
         $this->assertSame($lead->name, $audit->auditor_name);
 
         // Checklist ISPO otomatis dibuat untuk seluruh indikator
@@ -175,7 +194,21 @@ class AuditProjectCreationTest extends TestCase
         $this->assertTrue($audit->userIsLead($lead));
     }
 
-    public function test_admin_can_create_an_audit_with_default_title_and_scope_when_both_are_blank(): void
+    /**
+     * @return array<string, array{string, ?string, string}>
+     */
+    public static function validScopeSelections(): array
+    {
+        return [
+            'Hulu kebun' => ['hulu', 'hulu_kebun', 'hulu_kebun'],
+            'Hulu PKS' => ['hulu', 'hulu_pks', 'hulu_pks'],
+            'Hulu integrasi' => ['hulu', 'hulu_integrasi', 'hulu_integrasi'],
+            'Hilir' => ['hilir', null, 'hilir'],
+            'Bioenergi' => ['bioenergi', null, 'bioenergi'],
+        ];
+    }
+
+    public function test_admin_can_create_an_audit_with_default_title_when_title_is_blank(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $lead = User::factory()->create(['role' => 'auditor']);
@@ -186,7 +219,7 @@ class AuditProjectCreationTest extends TestCase
             'title' => '',
             'start_date' => now()->format('Y-m-d'),
             'end_date' => now()->addDays(5)->format('Y-m-d'),
-            'scope' => '',
+            'scope_category' => 'bioenergi',
             'lead_auditor_id' => $lead->id,
         ]);
 
@@ -194,7 +227,7 @@ class AuditProjectCreationTest extends TestCase
 
         $response->assertRedirect(route('audits.assignments.edit', $audit));
         $this->assertSame('Audit Verifikasi ISPO PT Sawit Nusantara', $audit->title);
-        $this->assertSame('Standar ISPO', $audit->scope);
+        $this->assertSame('bioenergi', $audit->scope);
     }
 
     public function test_non_admin_cannot_create_an_audit_project(): void
@@ -208,7 +241,8 @@ class AuditProjectCreationTest extends TestCase
             'title' => 'Audit Ilegal',
             'start_date' => now()->format('Y-m-d'),
             'end_date' => now()->addDays(5)->format('Y-m-d'),
-            'scope' => 'Standar ISPO',
+            'scope_category' => 'hulu',
+            'scope_detail' => 'hulu_kebun',
             'lead_auditor_id' => $lead->id,
         ])->assertForbidden();
 
@@ -222,7 +256,10 @@ class AuditProjectCreationTest extends TestCase
 
         // Kosong
         $this->actingAs($admin)->post(route('audits.store'), [])
-            ->assertSessionHasErrors(['company_id', 'start_date', 'end_date', 'lead_auditor_id']);
+            ->assertSessionHasErrors(['company_id', 'start_date', 'end_date', 'scope_category', 'lead_auditor_id'])
+            ->assertSessionHasErrors([
+                'scope_category' => 'Ruang lingkup verifikasi wajib dipilih.',
+            ]);
 
         // Tanggal selesai sebelum tanggal mulai
         $lead = User::factory()->create(['role' => 'auditor']);
@@ -241,5 +278,75 @@ class AuditProjectCreationTest extends TestCase
             'end_date' => now()->addDays(5)->format('Y-m-d'),
             'lead_auditor_id' => $anotherAdmin->id,
         ])->assertSessionHasErrors('lead_auditor_id');
+    }
+
+    public function test_hulu_scope_requires_a_valid_subcategory(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        $company = Company::factory()->create();
+        $payload = [
+            'company_id' => $company->id,
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->addDays(5)->format('Y-m-d'),
+            'scope_category' => 'hulu',
+            'lead_auditor_id' => $lead->id,
+        ];
+
+        $this->actingAs($admin)
+            ->post(route('audits.store'), $payload)
+            ->assertSessionHasErrors([
+                'scope_detail' => 'Sub-kategori Hulu wajib dipilih.',
+            ]);
+
+        $this->post(route('audits.store'), $payload + ['scope_detail' => 'hilir'])
+            ->assertSessionHasErrors([
+                'scope_detail' => 'Sub-kategori Hulu yang dipilih tidak valid.',
+            ]);
+
+        $this->assertDatabaseCount('audits', 0);
+    }
+
+    public function test_scope_detail_is_rejected_for_non_hulu_categories(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        $company = Company::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('audits.store'), [
+                'company_id' => $company->id,
+                'start_date' => now()->format('Y-m-d'),
+                'end_date' => now()->addDays(5)->format('Y-m-d'),
+                'scope_category' => 'hilir',
+                'scope_detail' => 'hulu_kebun',
+                'lead_auditor_id' => $lead->id,
+            ])
+            ->assertSessionHasErrors([
+                'scope_detail' => 'Sub-kategori hanya dapat dipilih untuk ruang lingkup Hulu.',
+            ]);
+
+        $this->assertDatabaseCount('audits', 0);
+    }
+
+    public function test_scope_category_must_be_one_of_the_available_categories(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $lead = User::factory()->create(['role' => 'auditor']);
+        $company = Company::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('audits.store'), [
+                'company_id' => $company->id,
+                'start_date' => now()->format('Y-m-d'),
+                'end_date' => now()->addDays(5)->format('Y-m-d'),
+                'scope_category' => 'unknown',
+                'lead_auditor_id' => $lead->id,
+            ])
+            ->assertSessionHasErrors([
+                'scope_category' => 'Ruang lingkup verifikasi yang dipilih tidak valid.',
+            ]);
+
+        $this->assertDatabaseCount('audits', 0);
     }
 }

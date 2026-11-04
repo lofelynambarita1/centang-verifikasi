@@ -49,6 +49,8 @@ class AuditTeamAssignmentWorkflowTest extends TestCase
             ->assertSee('Budi Lead')
             ->assertSee('Ani Auditor')
             ->assertSee('Citra Auditor')
+            ->assertSee('name="member_deadlines['.$lead->id.']"', false)
+            ->assertSee('type="datetime-local"', false)
             // Admin lain sama sekali tidak boleh ada di halaman form penugasan
             ->assertDontSee('Admin ISPO Rahasia')
             ->assertDontSee('name="team_members[]" value="'.$admin->id.'"', false)
@@ -125,6 +127,11 @@ class AuditTeamAssignmentWorkflowTest extends TestCase
             'lead_auditor_id' => $lead->id,
             'team_members_present' => '1',
             'team_members' => [$auditor1->id, $auditor2->id],
+            'member_deadlines' => [
+                $lead->id => '2026-11-06T17:00',
+                $auditor1->id => '2026-11-05T17:00',
+                $auditor2->id => '2026-11-07T17:00',
+            ],
             'assignments' => [
                 ['principle' => 1, 'user_id' => $auditor1->id],
                 ['principle' => 2, 'user_id' => $auditor2->id],
@@ -154,6 +161,18 @@ class AuditTeamAssignmentWorkflowTest extends TestCase
             'project_role' => ProjectRole::Auditor->value,
         ]);
         $this->assertSame(3, $audit->members()->count());
+        $this->assertSame(
+            '2026-11-06 17:00:00',
+            $audit->members()->where('user_id', $lead->id)->firstOrFail()->deadline_at->format('Y-m-d H:i:s'),
+        );
+        $this->assertSame(
+            '2026-11-05 17:00:00',
+            $audit->members()->where('user_id', $auditor1->id)->firstOrFail()->deadline_at->format('Y-m-d H:i:s'),
+        );
+        $this->assertSame(
+            '2026-11-07 17:00:00',
+            $audit->members()->where('user_id', $auditor2->id)->firstOrFail()->deadline_at->format('Y-m-d H:i:s'),
+        );
 
         // Pastikan penugasan prinsip tersimpan
         $this->assertDatabaseHas('audit_principle_user', [
@@ -171,6 +190,83 @@ class AuditTeamAssignmentWorkflowTest extends TestCase
             'user_id' => $lead->id,
             'principle_number' => 3,
         ]);
+    }
+
+    public function test_admin_sees_ordered_activity_and_late_badge_on_assignment_monitoring_page(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $firstAuditor = User::factory()->create(['role' => 'auditor', 'name' => 'Auditor Pertama']);
+        $lateAuditor = User::factory()->create(['role' => 'auditor', 'name' => 'Auditor Terlambat']);
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create([
+            'title' => 'Audit Timeline 2026',
+            'status' => 'in_progress',
+        ]);
+        $audit->items()->create(['title' => '1.1.1 Legalitas', 'sort_order' => 1]);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $firstAuditor->id,
+            'project_role' => ProjectRole::Auditor->value,
+            'deadline_at' => '2026-11-03 17:00:00',
+            'first_submitted_at' => '2026-11-03 10:00:00',
+            'last_submitted_at' => '2026-11-03 16:00:00',
+        ]);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lateAuditor->id,
+            'project_role' => ProjectRole::Auditor->value,
+            'deadline_at' => '2026-11-03 17:00:00',
+            'first_submitted_at' => '2026-11-04 09:00:00',
+            'last_submitted_at' => '2026-11-04 09:30:00',
+        ]);
+
+        $this->travelTo(new \DateTimeImmutable('2026-11-04 10:00:00'));
+
+        $this->actingAs($admin)
+            ->get(route('audits.assignments.index'))
+            ->assertOk()
+            ->assertSee('Timeline pengerjaan auditor')
+            ->assertSee('Auditor Pertama')
+            ->assertSee('Auditor Terlambat')
+            ->assertSee('Terlambat')
+            ->assertSee('Pengiriman ke-1: 03 Nov 2026 10:00')
+            ->assertSee('Pengiriman ke-2: 04 Nov 2026 09:00')
+            ->assertSee('Aktivitas terakhir: 04 Nov 2026 09:30');
+    }
+
+    public function test_auditor_can_save_work_after_deadline_and_submission_timestamps_are_recorded(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $auditor = User::factory()->create(['role' => 'auditor']);
+        $company = Company::factory()->create();
+        $audit = $company->audits()->create(['title' => 'Audit Terlambat']);
+        $item = $audit->items()->create([
+            'title' => '1.1.1 Dokumen legal',
+            'sort_order' => 1,
+        ]);
+        $member = AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $auditor->id,
+            'project_role' => ProjectRole::Auditor->value,
+            'added_by' => $admin->id,
+            'deadline_at' => '2026-11-03 17:00:00',
+        ]);
+        $audit->assignees()->attach($auditor->id, ['principle_number' => 1]);
+
+        $this->travelTo(new \DateTimeImmutable('2026-11-04 10:00:00'));
+
+        $this->actingAs($auditor)
+            ->put(route('audit-items.update', $item), ['status' => 'compliant'])
+            ->assertRedirect(route('audits.show', ['audit' => $audit, 'page' => 1]))
+            ->assertSessionHas('success', 'Hasil verifikasi tersimpan.');
+
+        $this->assertDatabaseHas('audit_items', [
+            'id' => $item->id,
+            'status' => 'compliant',
+        ]);
+        $this->assertSame('2026-11-04 10:00:00', $member->fresh()->first_submitted_at->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-11-04 10:00:00', $member->fresh()->last_submitted_at->format('Y-m-d H:i:s'));
+        $this->assertTrue($member->fresh()->isLate($audit->fresh()->status));
     }
 
     public function test_deselecting_an_auditor_from_project_team_removes_them_from_members_and_principle_assignments(): void
@@ -305,6 +401,53 @@ class AuditTeamAssignmentWorkflowTest extends TestCase
             ->assertSessionHasErrors('assignments');
 
         $this->assertSame(0, $audit->assignees()->count());
+    }
+
+    public function test_lead_auditor_cannot_change_admin_managed_member_deadlines(): void
+    {
+        $lead = User::factory()->create(['role' => 'lead_audit']);
+        $auditor = User::factory()->create(['role' => 'auditor']);
+        $audit = Company::factory()->create()->audits()->create(['title' => 'Audit deadline terbatas']);
+        $audit->items()->create(['title' => '1.1.1 Legalitas', 'sort_order' => 1]);
+
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+            'deadline_at' => '2026-11-06 17:00:00',
+        ]);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $auditor->id,
+            'project_role' => ProjectRole::Auditor->value,
+            'deadline_at' => '2026-11-05 17:00:00',
+        ]);
+
+        $this->actingAs($lead)
+            ->put(route('audits.assignments.update', $audit), [
+                'lead_auditor_id' => $lead->id,
+                'team_members_present' => '1',
+                'team_members' => [$auditor->id],
+                'member_deadlines' => [
+                    $lead->id => '2026-11-08T17:00',
+                    $auditor->id => '2026-11-09T17:00',
+                ],
+                'assignments' => [
+                    ['principle' => 1, 'user_id' => $auditor->id],
+                ],
+            ])
+            ->assertSessionHasErrors('member_deadlines');
+
+        $this->assertDatabaseHas('audit_project_members', [
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'deadline_at' => '2026-11-06 17:00:00',
+        ]);
+        $this->assertDatabaseHas('audit_project_members', [
+            'audit_id' => $audit->id,
+            'user_id' => $auditor->id,
+            'deadline_at' => '2026-11-05 17:00:00',
+        ]);
     }
 
     public function test_auditor_outside_the_selected_project_team_cannot_be_assigned_to_a_principle(): void

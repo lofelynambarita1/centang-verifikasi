@@ -29,6 +29,7 @@ class CompanyManagementTest extends TestCase
             ->assertSee('Nama perusahaan')
             ->assertSee('Bidang usaha')
             ->assertSee('Alamat')
+            ->assertSee('Klien sejak (tahun)')
             ->assertSee('Nama PIC')
             ->assertSee('Email PIC')
             ->assertSee('Luasan lahan (Ha)')
@@ -47,6 +48,7 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Perkebunan Nusantara',
             'industry' => 'Kelapa Sawit',
             'address' => 'Jl. Sawit Raya No. 1',
+            'client_year' => 2020,
             'contact_name' => 'Siti Aminah',
             'contact_email' => 'siti@ptpn.co.id',
         ]);
@@ -58,6 +60,8 @@ class CompanyManagementTest extends TestCase
             ->assertSee('PT Perkebunan Nusantara')
             ->assertSee('Kelapa Sawit')
             ->assertSee('Jl. Sawit Raya No. 1')
+            ->assertSee('name="client_year"', false)
+            ->assertSee('value="2020"', false)
             ->assertSee('Siti Aminah')
             ->assertSee('siti@ptpn.co.id')
             ->assertSee('Simpan Perusahaan')
@@ -75,6 +79,7 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Sawit Sejahtera Bersama',
             'industry' => 'Perkebunan Kelapa Sawit',
             'address' => 'Jl. Kebun Indah KM 5',
+            'client_year' => 2021,
             'land_area' => '1250.50',
             'contact_name' => 'Ahmad Fauzi',
             'contact_email' => 'fauzi@sawitsejahtera.com',
@@ -87,6 +92,7 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Sawit Sejahtera Bersama',
             'industry' => 'Perkebunan Kelapa Sawit',
             'address' => 'Jl. Kebun Indah KM 5',
+            'client_year' => 2021,
             'land_area' => '1250.50',
             'contact_name' => 'Ahmad Fauzi',
             'contact_email' => 'fauzi@sawitsejahtera.com',
@@ -95,6 +101,20 @@ class CompanyManagementTest extends TestCase
         $company = Company::where('name', 'PT Sawit Sejahtera Bersama')->firstOrFail();
         // Memastikan tidak ada audit otomatis yang dibuat
         $this->assertSame(0, $company->audits()->count());
+    }
+
+    public function test_company_year_must_be_a_valid_past_or_current_calendar_year(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->post(route('companies.store'), [
+                'name' => 'PT Tahun Tidak Valid',
+                'client_year' => now()->year + 1,
+            ])
+            ->assertSessionHasErrors('client_year');
+
+        $this->assertDatabaseMissing('companies', ['name' => 'PT Tahun Tidak Valid']);
     }
 
     public function test_admin_can_update_company_and_redirects_to_companies_index(): void
@@ -109,6 +129,7 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Baru Sukses Makmur',
             'industry' => 'Agribisnis Sawit',
             'address' => 'Jl. Poros Baru No. 8',
+            'client_year' => 2024,
             'land_area' => '250.75',
             'contact_name' => 'Rina Wijaya',
             'contact_email' => 'rina@barusukses.com',
@@ -122,47 +143,76 @@ class CompanyManagementTest extends TestCase
             'name' => 'PT Baru Sukses Makmur',
             'industry' => 'Agribisnis Sawit',
             'address' => 'Jl. Poros Baru No. 8',
+            'client_year' => 2024,
             'land_area' => '250.75',
             'contact_name' => 'Rina Wijaya',
             'contact_email' => 'rina@barusukses.com',
         ]);
     }
 
-    public function test_company_index_shows_master_data_and_audit_history_count_without_audit_progress_columns(): void
+    public function test_company_index_shows_company_details_and_latest_audit_status_without_industry_column(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $company = Company::factory()->create([
             'name' => 'PT Sawit Sejahtera',
             'industry' => 'Perkebunan Kelapa Sawit',
             'address' => 'Jl. Kebun Raya',
+            'client_year' => 2024,
             'contact_name' => 'Dewi Lestari',
             'contact_email' => 'dewi@sawit.co.id',
+            'created_at' => now()->setDate(2024, 6, 15),
         ]);
         $company->audits()->createMany([
-            ['title' => 'Surveillance 1'],
-            ['title' => 'Audit Resertifikasi'],
+            ['title' => 'Surveillance 1', 'status' => 'completed', 'start_date' => '2024-06-15'],
+            ['title' => 'Audit Resertifikasi', 'status' => 'in_progress', 'start_date' => '2026-03-20'],
         ]);
+        $companyWithoutAudit = Company::factory()->create([
+            'name' => 'PT Belum Audit',
+            'created_at' => now()->setDate(2023, 5, 10),
+        ]);
+        $completedCompany = Company::factory()->create(['name' => 'PT Audit Selesai']);
+        $completedCompany->audits()->create(['title' => 'Audit Selesai', 'status' => 'completed']);
+        $pendingCompany = Company::factory()->create(['name' => 'PT Audit Belum Mulai']);
+        $pendingCompany->audits()->create(['title' => 'Audit Pending', 'status' => 'pending']);
 
         $this->actingAs($admin)
             ->get(route('companies.index'))
             ->assertOk()
             ->assertSee('Nama perusahaan')
-            ->assertSee('Bidang usaha')
+            ->assertDontSee('Bidang usaha')
+            ->assertSee('Klien Sejak (Tahun)')
+            ->assertSee('Status Audit Terkini')
             ->assertSee('Kontak PIC')
             ->assertSee('Total riwayat audit')
             ->assertSee('PT Sawit Sejahtera')
             ->assertSee('Jl. Kebun Raya')
-            ->assertSee('Perkebunan Kelapa Sawit')
+            ->assertSee('class="company-client-year">2024</td>', false)
+            ->assertSee('Audit Resertifikasi - 2026')
+            ->assertSee('Status: Sedang berlangsung')
+            ->assertDontSee('Surveillance 1 - 2024')
+            ->assertSee($companyWithoutAudit->name)
+            ->assertSee('Belum ada audit')
+            ->assertSee('class="company-client-year">-</td>', false)
+            ->assertSee($completedCompany->name)
+            ->assertSee('Selesai')
+            ->assertSee($pendingCompany->name)
+            ->assertSee('Belum mulai')
+            ->assertDontSee('Perkebunan Kelapa Sawit')
             ->assertSee('Dewi Lestari')
             ->assertSee('dewi@sawit.co.id')
             ->assertSee('Detail / Riwayat')
             ->assertSee('+ Tambah perusahaan')
             ->assertSee('Edit')
             ->assertSee('Hapus')
+            ->assertSee('aria-label="Aksi untuk PT Sawit Sejahtera"', false)
+            ->assertSee('role="menu"', false)
+            ->assertSee(route('companies.show', $company), false)
+            ->assertSee(route('companies.edit', $company), false)
+            ->assertSee(route('companies.destroy', $company), false)
             ->assertSee('2')
             ->assertDontSee('Auditor / Tanggal')
             ->assertDontSee('Progres verifikasi')
-            ->assertDontSee('Surveillance 1');
+            ->assertDontSee('Perkebunan Kelapa Sawit');
     }
 
     public function test_auditors_and_lead_auditors_can_view_companies_but_not_management_controls(): void

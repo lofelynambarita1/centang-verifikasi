@@ -16,7 +16,7 @@
 
     <section class="panel panel--pad">
         <div class="table-wrap">
-            <table class="table">
+            <table class="table audits-assignment-table">
                 <thead>
                     <tr>
                         <th>Perusahaan dan audit</th>
@@ -36,6 +36,11 @@
                                 ->reject(fn ($user) => $user->id === $audit->leadMember?->user_id)
                                 ->pluck('name')
                                 ->implode(', ');
+                            $membersByFirstSubmission = $audit->members
+                                ->filter(fn ($member) => $member->first_submitted_at !== null)
+                                ->sortBy(fn ($member) => $member->first_submitted_at->getTimestamp());
+                            $membersWithoutSubmission = $audit->members
+                                ->filter(fn ($member) => $member->first_submitted_at === null);
                         @endphp
                         <tr>
                             <td>
@@ -56,11 +61,43 @@
                                 </div>
                             </td>
                             <td>
-                                <div>Lead Auditor: <strong>{{ $audit->leadMember?->user?->name ?: 'Belum ditugaskan' }}</strong></div>
-                                <div class="cell-meta">Tim: {{ $teamAuditorNames ?: 'Belum ditentukan' }}</div>
+                                <div class="audit-team-summary">
+                                    <div><span>Lead:</span> <strong>{{ $audit->leadMember?->user?->name ?: 'Belum ditugaskan' }}</strong></div>
+                                    <div class="audit-team-summary__members" title="{{ $teamAuditorNames ?: 'Belum ditentukan' }}">
+                                        <span>Tim:</span> {{ $teamAuditorNames ?: 'Belum ditentukan' }}
+                                    </div>
+                                </div>
+                                @if (auth()->user()->isAdmin() && $audit->members->isNotEmpty())
+                                    <details class="audit-team-details">
+                                        <summary>Detail Tim &amp; Deadline</summary>
+                                        <div class="audit-member-timeline" aria-label="Timeline pengerjaan auditor">
+                                            @foreach ($membersByFirstSubmission as $member)
+                                                <div class="audit-member-timeline__item">
+                                                    <strong>{{ $member->user?->name ?? 'Auditor' }}</strong>
+                                                    @if ($member->isLate($audit->status))
+                                                        <span class="late-badge">Terlambat</span>
+                                                    @endif
+                                                    <div>Deadline: {{ $member->deadline_at?->format('d M Y H:i') ?? 'Belum ditetapkan' }}</div>
+                                                    <div>Pengiriman ke-{{ $loop->iteration }}: {{ $member->first_submitted_at->format('d M Y H:i') }}</div>
+                                                    <div>Aktivitas terakhir: {{ $member->last_submitted_at?->format('d M Y H:i') ?? '-' }}</div>
+                                                </div>
+                                            @endforeach
+                                            @foreach ($membersWithoutSubmission as $member)
+                                                <div class="audit-member-timeline__item">
+                                                    <strong>{{ $member->user?->name ?? 'Auditor' }}</strong>
+                                                    @if ($member->isLate($audit->status))
+                                                        <span class="late-badge">Terlambat</span>
+                                                    @endif
+                                                    <div>Deadline: {{ $member->deadline_at?->format('d M Y H:i') ?? 'Belum ditetapkan' }}</div>
+                                                    <div>Belum ada aktivitas pengerjaan</div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </details>
+                                @endif
                             </td>
                             <td>
-                                <div class="progress">
+                                <div class="progress audits-assignment-progress">
                                     <div class="progress__track">
                                         <div class="progress__bar" style="width:{{ $progress }}%"></div>
                                     </div>
@@ -69,7 +106,7 @@
                                 <div class="cell-meta"><strong>{{ $verifiedItems }}</strong> / {{ $totalItems }} Indikator Selesai</div>
                             </td>
                             <td>
-                                <div class="cell-actions">
+                                <div class="cell-actions audits-assignment-actions">
                                     <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', $audit) }}">Buka Checklist</a>
                                     @if (auth()->user()?->canManageAssignments($audit))
                                         <a class="btn btn--primary btn--sm" href="{{ route('audits.assignments.edit', $audit) }}">Atur Tim/Penugasan</a>

@@ -66,8 +66,20 @@
                 </div>
 
                 <div class="field">
-                    <label for="scope">Ruang Lingkup Verifikasi <span style="color: var(--danger, #dc2626);">*</span></label>
-                    <input id="scope" name="scope" value="{{ old('scope', 'Standar ISPO') }}" placeholder="Standar ISPO" required>
+                    <label for="scope_category">Ruang Lingkup Verifikasi <span style="color: var(--danger, #dc2626);">*</span></label>
+                    <select id="scope_category" name="scope_category" data-selected-category="{{ old('scope_category') }}" data-selected-detail="{{ old('scope_detail') }}" required>
+                        <option value="">-- Pilih Ruang Lingkup --</option>
+                        <option value="hulu" @selected(old('scope_category') === 'hulu')>Hulu</option>
+                        <option value="hilir" @selected(old('scope_category') === 'hilir')>Hilir</option>
+                        <option value="bioenergi" @selected(old('scope_category') === 'bioenergi')>Bioenergi</option>
+                    </select>
+                </div>
+
+                <div class="field field--wide" id="scope-detail-field" hidden>
+                    <label for="scope_detail">Sub-Kategori Hulu <span style="color: var(--danger, #dc2626);">*</span></label>
+                    <select id="scope_detail" name="scope_detail" disabled>
+                        <option value="">-- Pilih Sub-Kategori Hulu --</option>
+                    </select>
                 </div>
 
                 <div class="field">
@@ -93,3 +105,41 @@
         </form>
     </section>
 @endsection
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const scopeCategory = document.getElementById('scope_category');
+            const scopeDetailField = document.getElementById('scope-detail-field');
+            const scopeDetail = document.getElementById('scope_detail');
+            const huluOptions = [
+                { value: 'hulu_kebun', label: 'Kebun Sawit' },
+                { value: 'hulu_pks', label: 'PKS / Pabrik' },
+                { value: 'hulu_integrasi', label: 'Integrasi (Kebun & PKS)' },
+            ];
+
+            function updateScopeDetail(selectedValue = '') {
+                const isHulu = scopeCategory.value === 'hulu';
+
+                scopeDetailField.hidden = !isHulu;
+                scopeDetail.disabled = !isHulu;
+                scopeDetail.required = isHulu;
+                scopeDetail.replaceChildren(new Option('-- Pilih Sub-Kategori Hulu --', ''));
+
+                if (isHulu) {
+                    huluOptions.forEach((option) => {
+                        scopeDetail.add(new Option(option.label, option.value));
+                    });
+                    scopeDetail.value = selectedValue;
+                }
+            }
+
+            scopeCategory.addEventListener('change', function () {
+                updateScopeDetail();
+            });
+
+            scopeCategory.value = scopeCategory.dataset.selectedCategory;
+            updateScopeDetail(scopeCategory.dataset.selectedDetail);
+        });
+    </script>
+@endpush

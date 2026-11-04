@@ -36,6 +36,12 @@ class AssignAuditPrinciplesRequest extends FormRequest
             'team_members_present' => ['required', 'accepted'],
             'team_members' => ['nullable', 'array'],
             'team_members.*' => ['integer', $auditorRule],
+            'member_deadlines' => [
+                Rule::prohibitedIf(! ($this->user()?->isAdmin() ?? false)),
+                'nullable',
+                'array',
+            ],
+            'member_deadlines.*' => ['nullable', 'date'],
             'assignments' => ['required', 'array'],
             'assignments.*.principle' => ['required', 'integer', 'between:1,7'],
             'assignments.*.user_id' => ['nullable', 'integer', $auditorRule],
@@ -112,6 +118,7 @@ class AssignAuditPrinciplesRequest extends FormRequest
         return [
             'lead_auditor_id.exists' => 'Lead Auditor harus merupakan pengguna dengan peran Auditor aktif.',
             'team_members.*.exists' => 'Anggota tim proyek harus merupakan pengguna dengan peran Auditor aktif.',
+            'member_deadlines.*.date' => 'Deadline setiap anggota harus berupa tanggal dan waktu yang valid.',
             'assignments.*.user_id.exists' => 'Auditor yang ditugaskan pada prinsip harus merupakan pengguna dengan peran Auditor aktif.',
         ];
     }

@@ -28,7 +28,13 @@ class StoreAuditRequest extends FormRequest
             'title' => ['nullable', 'string', 'max:255'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'scope' => ['nullable', 'string', 'max:255'],
+            'scope_category' => ['required', Rule::in(['hulu', 'hilir', 'bioenergi'])],
+            'scope_detail' => [
+                'required_if:scope_category,hulu',
+                'prohibited_unless:scope_category,hulu',
+                'nullable',
+                Rule::in(['hulu_kebun', 'hulu_pks', 'hulu_integrasi']),
+            ],
             'lead_auditor_id' => [
                 'required',
                 'integer',
@@ -50,6 +56,11 @@ class StoreAuditRequest extends FormRequest
             'start_date.required' => 'Tanggal mulai audit wajib diisi.',
             'end_date.required' => 'Tanggal selesai audit wajib diisi.',
             'end_date.after_or_equal' => 'Tanggal selesai audit tidak boleh sebelum tanggal mulai audit.',
+            'scope_category.required' => 'Ruang lingkup verifikasi wajib dipilih.',
+            'scope_category.in' => 'Ruang lingkup verifikasi yang dipilih tidak valid.',
+            'scope_detail.required_if' => 'Sub-kategori Hulu wajib dipilih.',
+            'scope_detail.prohibited_unless' => 'Sub-kategori hanya dapat dipilih untuk ruang lingkup Hulu.',
+            'scope_detail.in' => 'Sub-kategori Hulu yang dipilih tidak valid.',
             'lead_auditor_id.required' => 'Lead Auditor proyek wajib dipilih.',
             'lead_auditor_id.exists' => 'Lead Auditor harus dipilih dari pengguna dengan peran auditor yang aktif.',
         ];

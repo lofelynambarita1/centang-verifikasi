@@ -11,6 +11,16 @@
 @section('content')
     <p class="page-intro"><strong>{{ $audit->company->name }}</strong> · {{ $audit->title ?: 'Audit Verifikasi ISPO' }}</p>
 
+    @if ($errors->any())
+        <div class="form-error" role="alert">
+            <ul>
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     @php
         $principleTitles = [
             1 => 'Kepatuhan terhadap peraturan',
@@ -69,24 +79,44 @@
                 </legend>
                 <p style="margin-top: 0.25rem; margin-bottom: 1rem; font-size: 0.875rem; color: var(--text-muted, #64748b);">
                     Pilih auditor yang ditugaskan ke dalam tim proyek ini. Hanya user yang dipilih ke dalam tim proyek inilah yang terdaftar di AuditProjectMember dan dapat ditugaskan pada Prinsip 1–7.
+                    @if (auth()->user()->isAdmin())
+                        Atur deadline tiap anggota untuk memantau ketepatan waktu pengerjaan.
+                    @endif
                 </p>
                 <div class="assignment-users" id="teamSelectionGrid">
                     @forelse ($availableAuditors as $auditor)
                         @php
                             $isMember = in_array($auditor->id, $selectedMemberIds, true);
+                            $projectMember = $audit->members->firstWhere('user_id', $auditor->id);
                         @endphp
-                        <label class="check-control" id="team-label-{{ $auditor->id }}">
-                            <input type="checkbox"
-                                   name="team_members[]"
-                                   value="{{ $auditor->id }}"
-                                   @checked($isMember)
-                                   class="js-team-checkbox"
-                                   data-auditor-id="{{ $auditor->id }}"
-                                   data-auditor-name="{{ $auditor->name }}"
-                            >
-                            <span>{{ $auditor->name }}</span>
-                            <small>{{ $auditor->email }}</small>
-                        </label>
+                        <div class="assignment-member-card">
+                            <label class="check-control" id="team-label-{{ $auditor->id }}">
+                                <input type="checkbox"
+                                       name="team_members[]"
+                                       value="{{ $auditor->id }}"
+                                       @checked($isMember)
+                                       class="js-team-checkbox"
+                                       data-auditor-id="{{ $auditor->id }}"
+                                       data-auditor-name="{{ $auditor->name }}"
+                                >
+                                <span>{{ $auditor->name }}</span>
+                                <small>{{ $auditor->email }}</small>
+                            </label>
+                            @if (auth()->user()->isAdmin())
+                                <div class="field assignment-member-card__deadline">
+                                    <label for="member-deadline-{{ $auditor->id }}">Deadline</label>
+                                    <input
+                                        id="member-deadline-{{ $auditor->id }}"
+                                        class="js-member-deadline"
+                                        type="datetime-local"
+                                        name="member_deadlines[{{ $auditor->id }}]"
+                                        value="{{ old('member_deadlines.'.$auditor->id, $projectMember?->deadline_at?->format('Y-m-d\TH:i')) }}"
+                                        data-user-id="{{ $auditor->id }}"
+                                        @disabled(! $isMember && $currentLeadId !== $auditor->id)
+                                    >
+                                </div>
+                            @endif
+                        </div>
                     @empty
                         <span class="cell-meta">Belum ada auditor terdaftar di sistem.</span>
                     @endforelse
@@ -157,6 +187,7 @@
             const leadSelect = document.getElementById('lead_auditor_id');
             const teamCheckboxes = document.querySelectorAll('.js-team-checkbox');
             const principleSelects = document.querySelectorAll('.js-principle-assignee');
+            const memberDeadlines = document.querySelectorAll('.js-member-deadline');
 
             const auditorData = new Map();
             teamCheckboxes.forEach(function (cb) {
@@ -206,6 +237,14 @@
                     select.replaceChildren(...options);
                     select.value = selectedTeamIds.has(selectedUserId) ? selectedUserId : '';
                     select.name = 'assignments[' + principleNumber + '][user_id]';
+                });
+
+                memberDeadlines.forEach(function (input) {
+                    const isLead = input.dataset.userId === leadId;
+                    const isSelectedMember = Array.from(teamCheckboxes).some(function (checkbox) {
+                        return checkbox.value === input.dataset.userId && checkbox.checked;
+                    });
+                    input.disabled = !isLead && !isSelectedMember;
                 });
             }
 

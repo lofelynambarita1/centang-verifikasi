@@ -26,6 +26,7 @@ class StoreCompanyRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'industry' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:500'],
+            'client_year' => ['nullable', 'integer', 'between:1900,'.now()->year],
             'land_area' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
             'contact_name' => ['nullable', 'string', 'max:255'],
             'contact_email' => ['nullable', 'email', 'max:255'],

@@ -14,7 +14,13 @@ class CompanyController extends Controller
      */
     public function index(): View
     {
-        return view('companies.index', ['companies' => Company::withCount('audits')->latest()->get()]);
+        return view('companies.index', [
+            'companies' => Company::query()
+                ->with('latestAudit')
+                ->withCount('audits')
+                ->latest()
+                ->get(),
+        ]);
     }
 
     /**

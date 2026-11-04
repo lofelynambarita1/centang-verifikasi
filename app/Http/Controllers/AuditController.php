@@ -54,9 +54,9 @@ class AuditController extends Controller
                 ? $validated['title']
                 : "Audit Verifikasi ISPO {$company->name}";
 
-            $scope = ! empty($validated['scope'])
-                ? $validated['scope']
-                : 'Standar ISPO';
+            $scope = $validated['scope_category'] === 'hulu'
+                ? $validated['scope_detail']
+                : $validated['scope_category'];
 
             $audit = Audit::create([
                 'company_id' => $company->id,
@@ -209,6 +209,7 @@ class AuditController extends Controller
         ]);
 
         $audit->update(['summary_notes' => $validated['summary_notes'] ?? null]);
+        $this->recordAuditActivity($audit, $request->user());
 
         return redirect()->route('audits.show', $audit)
             ->with('success', 'Ringkasan penilaian berhasil disimpan.');
@@ -253,10 +254,12 @@ class AuditController extends Controller
 
             AuditProjectMember::updateOrCreate(
                 ['audit_id' => $audit->id, 'user_id' => $leadAuditorId],
-                [
-                    'project_role' => ProjectRole::LeadAudit->value,
-                    'added_by' => auth()->id(),
-                ]
+                $this->projectMemberAttributes(
+                    $request,
+                    $validated,
+                    $leadAuditorId,
+                    ProjectRole::LeadAudit,
+                )
             );
         } else {
             AuditProjectMember::where('audit_id', $audit->id)
@@ -267,10 +270,12 @@ class AuditController extends Controller
         foreach ($teamMemberIds as $memberId) {
             AuditProjectMember::updateOrCreate(
                 ['audit_id' => $audit->id, 'user_id' => $memberId],
-                [
-                    'project_role' => ProjectRole::Auditor->value,
-                    'added_by' => auth()->id(),
-                ]
+                $this->projectMemberAttributes(
+                    $request,
+                    $validated,
+                    $memberId,
+                    ProjectRole::Auditor,
+                )
             );
         }
 
@@ -352,6 +357,7 @@ class AuditController extends Controller
         $auditItem->update($validated);
         $audit = $auditItem->audit()->with('company')->firstOrFail();
         $audit->update(['status' => 'in_progress']);
+        $this->recordAuditActivity($audit, $request->user());
 
         if ($validated['status'] === 'non_compliant' && $previousStatus !== 'non_compliant') {
             $this->notifyAuditManagers(
@@ -377,6 +383,7 @@ class AuditController extends Controller
 
         $request->validate(['evidence' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240']]);
         $auditItem->update(['evidence_path' => $request->file('evidence')->store('audit-evidence', 'public')]);
+        $this->recordAuditActivity($auditItem->audit, $request->user());
 
         return back()->with('success', 'Bukti pendukung berhasil diunggah.');
     }
@@ -399,6 +406,7 @@ class AuditController extends Controller
             'sort_order' => ((int) $auditItem->hasils()->max('sort_order')) + 1,
         ]);
         $audit->update(['status' => 'in_progress']);
+        $this->recordAuditActivity($audit, $request->user());
         $this->notifyAuditManagers(
             $notifications,
             (int) $request->user()->getAuthIdentifier(),
@@ -428,7 +436,9 @@ class AuditController extends Controller
             $auditHasil->update(['evidence_path' => $request->file('evidence')->store('audit-evidence', 'public')]);
         }
 
-        $auditHasil->auditItem->audit()->update(['status' => 'in_progress']);
+        $audit = $auditHasil->auditItem->audit;
+        $audit->update(['status' => 'in_progress']);
+        $this->recordAuditActivity($audit, $request->user());
 
         return back()->with('success', 'Hasil audit tersimpan sebagai draft.');
     }
@@ -445,6 +455,7 @@ class AuditController extends Controller
 
         $auditHasil->delete();
         $audit->update(['status' => 'in_progress']);
+        $this->recordAuditActivity($audit, request()->user());
 
         return back()->with('success', 'Hasil audit dihapus.');
     }
@@ -457,6 +468,49 @@ class AuditController extends Controller
         return $request->validate([
             'content' => ['nullable', 'string', 'max:5000', 'required_without:evidence'],
             'evidence' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240', 'required_without:content'],
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function projectMemberAttributes(
+        AssignAuditPrinciplesRequest $request,
+        array $validated,
+        int $memberId,
+        ProjectRole $projectRole,
+    ): array {
+        $attributes = [
+            'project_role' => $projectRole->value,
+            'added_by' => $request->user()->id,
+        ];
+
+        if (
+            $request->user()->isAdmin()
+            && array_key_exists($memberId, $validated['member_deadlines'] ?? [])
+        ) {
+            $attributes['deadline_at'] = $validated['member_deadlines'][$memberId];
+        }
+
+        return $attributes;
+    }
+
+    private function recordAuditActivity(Audit $audit, User $actor): void
+    {
+        $member = AuditProjectMember::query()
+            ->where('audit_id', $audit->id)
+            ->where('user_id', $actor->id)
+            ->first();
+
+        if ($member === null) {
+            return;
+        }
+
+        $submittedAt = now();
+        $member->update([
+            'first_submitted_at' => $member->first_submitted_at ?? $submittedAt,
+            'last_submitted_at' => $submittedAt,
         ]);
     }
 
@@ -500,6 +554,7 @@ class AuditController extends Controller
         abort_if($audit->items->contains('status', 'pending'), 422, 'Semua item checklist harus diisi terlebih dahulu.');
 
         $audit->update(['status' => 'completed', 'completed_at' => now()]);
+        $this->recordAuditActivity($audit, auth()->user());
 
         $actorId = (int) auth()->id();
         $leadUser = $audit->leadMember?->user;

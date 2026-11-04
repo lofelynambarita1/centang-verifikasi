@@ -15,6 +15,10 @@
         <textarea id="address" name="address" rows="3">{{ old('address', $company?->address) }}</textarea>
     </div>
     <div class="field">
+        <label for="client_year">Klien sejak (tahun)</label>
+        <input id="client_year" type="number" name="client_year" min="1900" max="{{ now()->year }}" step="1" value="{{ old('client_year', $company?->client_year) }}">
+    </div>
+    <div class="field">
         <label for="land_area">Luasan lahan (Ha)</label>
         <input id="land_area" type="number" name="land_area" min="0" step="0.01" value="{{ old('land_area', $company?->land_area) }}">
     </div>
