@@ -83,6 +83,74 @@
         </article>
     </section>
 
+    @if ($canViewAllProgress && ($filters['search'] ?? '') === '')
+        @php
+            $indicatorTotal = $stats['total_items'];
+            $metEnd = $indicatorTotal > 0 ? $stats['met_items'] / $indicatorTotal * 100 : 0;
+            $notMetEnd = $metEnd + ($indicatorTotal > 0 ? $stats['not_met_items'] / $indicatorTotal * 100 : 0);
+            $notApplicableEnd = $notMetEnd + ($indicatorTotal > 0 ? $stats['not_applicable_items'] / $indicatorTotal * 100 : 0);
+        @endphp
+
+        <section class="panel panel--pad dashboard-overall" aria-labelledby="dashboard-overall-title">
+            <div class="panel__head">
+                <div class="dashboard-section-heading">
+                    <span class="dashboard-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3v9h9"/>
+                            <path d="M20.5 15A9 9 0 1 1 9 3.5"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h2 id="dashboard-overall-title">Status Seluruh Indikator</h2>
+                        <p>Total keseluruhan penilaian</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-overall__body">
+                <div
+                    class="dashboard-overall__chart"
+                    role="img"
+                    aria-label="Diagram lingkaran status indikator: Memenuhi {{ $stats['met_items'] }}, Belum memenuhi {{ $stats['not_met_items'] }}, Tidak berlaku {{ $stats['not_applicable_items'] }}, Menunggu penilaian {{ $stats['pending_items'] }}"
+                    @if ($indicatorTotal > 0)
+                        style="--dashboard-met-end: {{ $metEnd }}%; --dashboard-not-met-end: {{ $notMetEnd }}%; --dashboard-not-applicable-end: {{ $notApplicableEnd }}%;"
+                    @endif
+                >
+                    <div class="dashboard-overall__chart-center">
+                        <strong>{{ $stats['completion_percentage'] }}%</strong>
+                        <span>terverifikasi</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-overall__details">
+                    <ul class="dashboard-overall__legend">
+                        <li>
+                            <span class="dashboard-overall__swatch dashboard-overall__swatch--met" aria-hidden="true"></span>
+                            <span>Memenuhi</span>
+                            <strong>{{ $stats['met_items'] }}</strong>
+                        </li>
+                        <li>
+                            <span class="dashboard-overall__swatch dashboard-overall__swatch--not-met" aria-hidden="true"></span>
+                            <span>Belum memenuhi</span>
+                            <strong>{{ $stats['not_met_items'] }}</strong>
+                        </li>
+                        <li>
+                            <span class="dashboard-overall__swatch dashboard-overall__swatch--not-applicable" aria-hidden="true"></span>
+                            <span>Tidak berlaku</span>
+                            <strong>{{ $stats['not_applicable_items'] }}</strong>
+                        </li>
+                        <li>
+                            <span class="dashboard-overall__swatch dashboard-overall__swatch--pending" aria-hidden="true"></span>
+                            <span>Menunggu penilaian</span>
+                            <strong>{{ $stats['pending_items'] }}</strong>
+                        </li>
+                    </ul>
+                    <p class="dashboard-overall__summary">{{ $stats['completed_items'] }} dari {{ $stats['total_items'] }} indikator telah dinilai</p>
+                </div>
+            </div>
+        </section>
+    @endif
+
     <section class="panel panel--pad dashboard-projects" id="active-projects">
         <div class="panel__head">
             <div class="dashboard-section-heading">
@@ -96,7 +164,9 @@
                     <p>Progres indikator dan penanggung jawab tiap proyek</p>
                 </div>
             </div>
-            <a class="panel__link" href="{{ route('audits.assignments.index') }}">Lihat penugasan</a>
+            @if ($canViewAllProgress)
+                <a class="panel__link" href="{{ route('audits.assignments.index') }}">Lihat penugasan</a>
+            @endif
         </div>
 
         <div class="table-wrap">
@@ -113,9 +183,8 @@
                 <tbody>
                     @forelse ($activeAudits as $audit)
                         @php
-                            $totalItems = $audit->items->count();
-                            $verifiedItems = $audit->items->whereIn('status', ['compliant', 'non_compliant', 'not_applicable'])->count();
-                            $progress = $totalItems ? round($verifiedItems / $totalItems * 100) : 0;
+                            $progressSummary = $dashboardProgress[$audit->id]['summary'];
+                            $principleProgress = $dashboardProgress[$audit->id]['principles'];
                             $teamAuditorNames = $audit->teamAuditors()
                                 ->reject(fn ($user) => $user->id === $audit->leadMember?->user_id)
                                 ->pluck('name')
@@ -139,11 +208,38 @@
                             <td>
                                 <div class="progress dashboard-projects__progress">
                                     <div class="progress__track">
-                                        <div class="progress__bar" style="width:{{ $progress }}%"></div>
+                                        <div class="progress__bar" style="width:{{ $progressSummary['percentage'] }}%"></div>
                                     </div>
-                                    <span class="progress__pct">{{ $progress }}%</span>
+                                    <span class="progress__pct">{{ $progressSummary['percentage'] }}%</span>
                                 </div>
-                                <div class="cell-meta"><strong>{{ $verifiedItems }}</strong> / {{ $totalItems }} indikator selesai</div>
+                                <div class="cell-meta"><strong>{{ $progressSummary['verified'] }}</strong> / {{ $progressSummary['total'] }} indikator selesai</div>
+                                @if ($principleProgress !== [])
+                                    <details class="dashboard-projects__principles">
+                                        <summary>Progres per prinsip</summary>
+                                        <ul>
+                                            @foreach ($principleProgress as $principle)
+                                                <li data-principle="{{ $principle['principle'] }}">
+                                                    <div class="dashboard-projects__principle-label">
+                                                        <span>Prinsip {{ $principle['principle'] }}</span>
+                                                        <strong>{{ $principle['percentage'] }}%</strong>
+                                                    </div>
+                                                    <div
+                                                        class="dashboard-projects__principle-track"
+                                                        role="progressbar"
+                                                        aria-label="Progres Prinsip {{ $principle['principle'] }}"
+                                                        aria-valuenow="{{ $principle['percentage'] }}"
+                                                        aria-valuemin="0"
+                                                        aria-valuemax="100"
+                                                        aria-valuetext="{{ $principle['verified'] }} dari {{ $principle['total'] }} indikator selesai"
+                                                    >
+                                                        <span style="width: {{ $principle['percentage'] }}%"></span>
+                                                    </div>
+                                                    <span class="dashboard-projects__principle-count">{{ $principle['verified'] }} / {{ $principle['total'] }}</span>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </details>
+                                @endif
                             </td>
                             <td class="dashboard-projects__action">
                                 <a class="btn btn--ghost btn--sm" href="{{ route('audits.show', $audit) }}">Buka</a>

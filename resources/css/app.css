@@ -1707,6 +1707,27 @@ img, svg { vertical-align: middle; }
 .summary-metric { display: flex; align-items: baseline; gap: 14px; color: var(--muted); font-size: 13.5px; }
 .summary-metric strong { font-size: 17px; color: var(--primary); font-weight: 800; }
 .summary-foot { margin-top: 12px; color: var(--muted); font-size: 13.5px; }
+.audit-principle-progress {
+    margin-bottom: 16px;
+    padding: 20px 22px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #fff;
+    box-shadow: var(--shadow);
+}
+.audit-principle-progress__heading { margin-bottom: 16px; }
+.audit-principle-progress__heading h2 { margin: 0; font-size: 16px; }
+.audit-principle-progress__heading p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.audit-principle-progress__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.audit-principle-progress__item { display: grid; align-content: start; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: #f9faff; }
+.audit-principle-progress__label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.audit-principle-progress__label strong { color: var(--text); }
+.audit-principle-progress__label span { color: var(--primary); font-weight: 800; }
+.audit-principle-progress__track,
+.dashboard-projects__principle-track { height: 7px; overflow: hidden; border-radius: 99px; background: #e9edf5; }
+.audit-principle-progress__track span,
+.dashboard-projects__principle-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #536ec3, var(--primary)); }
+.audit-principle-progress__count { color: var(--muted); font-size: 11px; }
 
 .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .tab {
@@ -1970,6 +1991,55 @@ img, svg { vertical-align: middle; }
    ===================================================================== */
 .dashboard-filter-form { grid-template-columns: minmax(0, 1fr) auto; }
 #active-projects { scroll-margin-top: 118px; }
+.dashboard-overall { margin-bottom: 22px; }
+.dashboard-overall__body {
+    display: grid;
+    grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+    align-items: center;
+    gap: 30px;
+    padding: 8px 12px 4px;
+}
+.dashboard-overall__chart {
+    position: relative;
+    display: grid;
+    width: 190px;
+    aspect-ratio: 1;
+    place-items: center;
+    margin: 0 auto;
+    border-radius: 50%;
+    background: #e9edf5;
+    background: conic-gradient(
+        var(--success) 0% var(--dashboard-met-end, 0%),
+        var(--danger) var(--dashboard-met-end, 0%) var(--dashboard-not-met-end, 0%),
+        #5268b3 var(--dashboard-not-met-end, 0%) var(--dashboard-not-applicable-end, 0%),
+        #e9edf5 var(--dashboard-not-applicable-end, 0%) 100%
+    );
+}
+.dashboard-overall__chart::before {
+    position: absolute;
+    inset: 25%;
+    border-radius: 50%;
+    background: #fff;
+    content: '';
+}
+.dashboard-overall__chart-center {
+    position: relative;
+    display: grid;
+    gap: 1px;
+    text-align: center;
+}
+.dashboard-overall__chart-center strong { font-size: 30px; font-weight: 800; letter-spacing: -.05em; line-height: 1.1; }
+.dashboard-overall__chart-center span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.dashboard-overall__details { min-width: 0; }
+.dashboard-overall__legend { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.dashboard-overall__legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.dashboard-overall__legend strong { color: var(--text); font-size: 14px; }
+.dashboard-overall__swatch { width: 10px; height: 10px; border-radius: 50%; }
+.dashboard-overall__swatch--met { background: var(--success); }
+.dashboard-overall__swatch--not-met { background: var(--danger); }
+.dashboard-overall__swatch--not-applicable { background: #5268b3; }
+.dashboard-overall__swatch--pending { background: #cbd2e0; }
+.dashboard-overall__summary { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
 .dashboard-projects { width: 100%; min-width: 0; }
 .dashboard-projects__table { width: 100%; min-width: 0; table-layout: fixed; }
 .dashboard-projects__table th,
@@ -1990,9 +2060,18 @@ img, svg { vertical-align: middle; }
 .dashboard-projects__table .progress__track { min-width: 0; }
 .dashboard-projects__table .progress__pct { min-width: 34px; font-size: 12px; }
 .dashboard-projects__table .cell-meta { font-size: 11.5px; line-height: 1.4; }
+.dashboard-projects__principles { margin-top: 7px; font-size: 11px; }
+.dashboard-projects__principles summary { color: var(--primary); font-weight: 700; cursor: pointer; }
+.dashboard-projects__principles ul { display: grid; gap: 7px; margin: 8px 0 0; padding: 0; list-style: none; }
+.dashboard-projects__principles li { display: grid; gap: 3px; }
+.dashboard-projects__principle-label { display: flex; justify-content: space-between; gap: 5px; color: var(--muted); }
+.dashboard-projects__principle-label strong { color: var(--text); }
+.dashboard-projects__principle-track { height: 5px; }
+.dashboard-projects__principle-count { color: var(--quiet); font-size: 10px; }
 @media (max-width: 940px) {
     .dashboard-projects__table { table-layout: auto; }
     .dashboard-projects__progress { min-width: 0; }
+    .audit-principle-progress__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 /* =====================================================================
    RESPONSIVE
@@ -2019,6 +2098,10 @@ img, svg { vertical-align: middle; }
     .hero__body { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
+    .audit-principle-progress__grid { grid-template-columns: 1fr; }
+    .dashboard-overall__body { grid-template-columns: 1fr; gap: 18px; padding: 4px 0 0; }
+    .dashboard-overall__chart { width: 170px; }
+    .dashboard-overall__legend { gap: 8px; }
     .app-nav__link span { display: none; }
     .app-nav__link { padding: 11px; }
     .app-topbar { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 18px; }

@@ -13,6 +13,7 @@ use App\Models\AuditProjectMember;
 use App\Models\Company;
 use App\Models\User;
 use App\Notifications\AuditSystemNotification;
+use App\Support\AuditProgressSummary;
 use App\Support\IspoChecklist;
 use App\Support\NotificationDispatcher;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -158,9 +159,30 @@ class AuditController extends Controller
     public function show(Audit $audit): View
     {
         $audit->load(['company', 'findings', 'assignees', 'leadMember.user']);
+        $viewer = auth()->user();
+        $canViewAllProgress = $viewer !== null
+            && ($viewer->isAdmin() || $viewer->isLeadAuditor($audit));
         $canDownloadReport = auth()->user() !== null && $audit->userCanAccessReport(auth()->user());
         $allItems = $audit->items()->with('hasils')->get();
         $isIspoChecklist = $allItems->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
+        $assignedPrinciples = $viewer === null
+            ? []
+            : $audit->assignees
+                ->filter(fn (User $assignee): bool => $assignee->is($viewer))
+                ->map(fn (User $assignee): int => (int) $assignee->pivot->principle_number)
+                ->filter(fn (int $number): bool => $number > 0)
+                ->unique()
+                ->values()
+                ->all();
+        $progressItems = $canViewAllProgress
+            ? $allItems
+            : $allItems
+                ->filter(fn (AuditItem $item): bool => in_array($item->principleNumber(), $assignedPrinciples, true))
+                ->values();
+        $visiblePrinciples = $isIspoChecklist
+            ? ($canViewAllProgress ? range(1, 7) : $assignedPrinciples)
+            : [];
+        $progressSummary = AuditProgressSummary::forItems($progressItems);
 
         if ($isIspoChecklist) {
             $principles = collect(range(1, 7))->mapWithKeys(function (int $number) use ($allItems): array {
@@ -182,6 +204,9 @@ class AuditController extends Controller
             'isIspoChecklist' => $isIspoChecklist,
             'currentPage' => $currentPage,
             'canDownloadReport' => $canDownloadReport,
+            'canViewAllProgress' => $canViewAllProgress,
+            'progressSummary' => $progressSummary,
+            'principleProgress' => AuditProgressSummary::byPrinciple($allItems, $visiblePrinciples),
         ]);
     }
 
