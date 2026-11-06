@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CertificationProcessController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
@@ -10,6 +11,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('login', [AuthController::class, 'create'])->name('login');
 Route::post('login', [AuthController::class, 'store'])->name('login.store');
+Route::get('certificates/{token}', [CertificationProcessController::class, 'certificate'])
+    ->middleware('throttle:30,1')
+    ->name('certificates.show');
 
 Route::middleware('auth')->group(function (): void {
     Route::post('logout', [AuthController::class, 'destroy'])->name('logout');
@@ -18,6 +22,14 @@ Route::middleware('auth')->group(function (): void {
     Route::post('notifications/{notificationId}/read', [NotificationController::class, 'read'])->name('notifications.read');
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::resource('companies', CompanyController::class);
+    Route::get('certification-process/{category}', [CertificationProcessController::class, 'index'])
+        ->name('certification-process.index');
+    Route::get('certification-process/{category}/{company}', [CertificationProcessController::class, 'show'])
+        ->name('certification-process.show');
+    Route::put('certification-process/{category}/{company}', [CertificationProcessController::class, 'update'])
+        ->name('certification-process.update');
+    Route::get('certification-process/{category}/{company}/documents/{document}', [CertificationProcessController::class, 'download'])
+        ->name('certification-process.documents.download');
     Route::get('audits/assignments', [AuditController::class, 'assignmentsIndex'])
         ->name('audits.assignments.index');
     Route::get('audits/{audit}/assignments', [AuditController::class, 'assignmentsEdit'])

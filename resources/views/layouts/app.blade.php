@@ -34,6 +34,27 @@
                 <span>Perusahaan</span>
             </a>
             @if (auth()->user()?->canManageAssignments())
+                <details class="app-nav-group" @if (request()->routeIs('certification-process.*')) open @endif>
+                    <summary class="app-nav__link app-nav-group__trigger @if (request()->routeIs('certification-process.*')) active @endif" aria-label="Proses Sertifikasi">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M7 3h10l4 4v14H3V3h4z"/>
+                            <path d="M7 3v5h10V3M7 14h10M7 18h6"/>
+                        </svg>
+                        <span>Proses Sertifikasi</span>
+                        <svg class="app-nav-group__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                    </summary>
+                    <div class="app-nav-group__items">
+                        @foreach (\App\Enums\CertificationCategory::cases() as $category)
+                            <a class="app-nav__link app-nav-group__item @if (request()->route('category') === $category->value) active @endif" href="{{ route('certification-process.index', $category->value) }}">
+                                <span>{{ $category->label() }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                </details>
+            @endif
+            @if (auth()->user()?->canManageAssignments())
                 <a class="app-nav__link @if (request()->routeIs('audits.assignments.*')) active @endif" href="{{ route('audits.assignments.index') }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <rect x="4" y="3" width="16" height="18" rx="2"/>

@@ -381,7 +381,6 @@
                             <label for="status-{{ $item->id }}">Status indikator:</label>
                             <span class="chip {{ $statusClass }}">{{ $statusLabel }}</span>
                             <select id="status-{{ $item->id }}" name="status">
-                                <option value="pending" @selected($item->status === 'pending')>Belum diperiksa</option>
                                 <option value="compliant" @selected($item->status === 'compliant')>Memenuhi</option>
                                 <option value="non_compliant" @selected($item->status === 'non_compliant')>Tidak memenuhi</option>
                                 <option value="not_applicable" @selected($item->status === 'not_applicable')>NA</option>

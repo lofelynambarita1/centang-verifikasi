@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCompanyRequest;
+use App\Models\CertificationProcess;
 use App\Models\Company;
 use App\Notifications\AuditSystemNotification;
 use App\Support\NotificationDispatcher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class CompanyController extends Controller
 {
@@ -100,7 +103,26 @@ class CompanyController extends Controller
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
         $companyName = $company->name;
+        $certificationDocumentPaths = $company->certificationProcesses()
+            ->get(['summary_document_path', 'audit_correction_document_path', 'certificate_document_path'])
+            ->flatMap(fn (CertificationProcess $process) => [
+                $process->summary_document_path,
+                $process->audit_correction_document_path,
+                $process->certificate_document_path,
+            ])
+            ->filter()
+            ->all();
         $company->delete();
+
+        foreach ($certificationDocumentPaths as $path) {
+            if (! Storage::disk('local')->delete($path)) {
+                Log::warning('Dokumen sertifikasi gagal dihapus setelah perusahaan dihapus.', [
+                    'company_id' => $company->id,
+                    'path' => $path,
+                ]);
+            }
+        }
+
         $notifications->broadcast(new AuditSystemNotification(
             'company_deleted',
             'Data perusahaan dihapus',
