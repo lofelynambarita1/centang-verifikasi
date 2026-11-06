@@ -23,9 +23,9 @@
 @section('content')
     <p class="page-intro">Kelola master data perusahaan (auditee) dan riwayat auditnya.</p>
 
-    <section class="panel panel--pad">
+    <section class="panel panel--pad companies-panel" aria-label="Daftar perusahaan">
         <div class="table-wrap">
-            <table class="table">
+            <table class="table companies-table">
                 <thead>
                     <tr>
                         <th>Nama perusahaan</th>
@@ -73,7 +73,9 @@
                             <strong>{{ $company->contact_name ?: 'Belum diisi' }}</strong>
                             <div class="cell-meta">{{ $company->contact_email ?: 'Email belum diisi' }}</div>
                         </td>
-                        <td>{{ $company->audits_count }}</td>
+                        <td>
+                            <span class="companies-audit-count">{{ $company->audits_count }}</span>
+                        </td>
                         <td>
                             <div class="company-actions" data-company-actions>
                                 <button

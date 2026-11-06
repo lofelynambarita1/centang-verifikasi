@@ -99,6 +99,67 @@ class AuditWorkflowTest extends TestCase
             ->assertSee('Prinsip 12');
     }
 
+    public function test_admin_and_lead_see_progress_for_every_audit_principle(): void
+    {
+        $audit = Company::factory()->create()->audits()->create(['title' => 'Audit Progres Prinsip']);
+        $audit->items()->createMany([
+            ['title' => '1.1.1 Legalitas', 'sort_order' => 1, 'status' => 'compliant'],
+            ['title' => '1.1.2 Perizinan', 'sort_order' => 2, 'status' => 'pending'],
+            ['title' => '2.1.1 Lingkungan', 'sort_order' => 3, 'status' => 'non_compliant'],
+        ]);
+
+        $this->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertSee('Progres verifikasi keseluruhan')
+            ->assertSee('Progres semua prinsip')
+            ->assertSee('data-principle="1"', false)
+            ->assertSee('data-principle="2"', false)
+            ->assertSee('aria-valuetext="1 dari 2 indikator selesai"', false)
+            ->assertSee('aria-valuetext="1 dari 1 indikator selesai"', false);
+
+        $lead = User::factory()->create(['role' => 'auditor']);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $lead->id,
+            'project_role' => ProjectRole::LeadAudit->value,
+            'added_by' => User::factory()->create(['role' => 'admin'])->id,
+        ]);
+
+        $this->actingAs($lead)
+            ->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertSee('Progres verifikasi keseluruhan')
+            ->assertSee('Progres semua prinsip')
+            ->assertSee('data-principle="2"', false);
+    }
+
+    public function test_auditor_only_sees_progress_for_assigned_principles_on_audit_form(): void
+    {
+        $auditor = User::factory()->create(['role' => 'auditor']);
+        $audit = Company::factory()->create()->audits()->create(['title' => 'Audit Progres Auditor']);
+        $audit->items()->createMany([
+            ['title' => '1.1.1 Legalitas', 'sort_order' => 1, 'status' => 'compliant'],
+            ['title' => '1.1.2 Perizinan', 'sort_order' => 2, 'status' => 'pending'],
+            ['title' => '2.1.1 Lingkungan', 'sort_order' => 3, 'status' => 'compliant'],
+        ]);
+        $audit->assignees()->attach($auditor, ['principle_number' => 1]);
+        AuditProjectMember::create([
+            'audit_id' => $audit->id,
+            'user_id' => $auditor->id,
+            'project_role' => ProjectRole::Auditor->value,
+            'added_by' => User::factory()->create(['role' => 'admin'])->id,
+        ]);
+
+        $this->actingAs($auditor)
+            ->get(route('audits.show', $audit))
+            ->assertOk()
+            ->assertSee('Progres prinsip yang ditugaskan')
+            ->assertSee('1 / 2 indikator terisi')
+            ->assertSee('data-principle="1"', false)
+            ->assertDontSee('data-principle="2"', false)
+            ->assertDontSee('Progres verifikasi keseluruhan');
+    }
+
     public function test_audit_report_renders_all_checklist_items(): void
     {
         $company = Company::factory()->create();

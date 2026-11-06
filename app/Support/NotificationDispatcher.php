@@ -4,19 +4,18 @@ namespace App\Support;
 
 use App\Models\User;
 use App\Notifications\AuditSystemNotification;
-use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
+use Illuminate\Database\Eloquent\Collection;
 
 class NotificationDispatcher
 {
-    /** @param iterable<User> $users */
-    public function send(iterable $users, AuditSystemNotification $notification): void
+    public function broadcast(AuditSystemNotification $notification): void
     {
-        foreach ($users as $user) {
-            try {
-                $user->notify($notification);
-            } catch (TransportExceptionInterface $exception) {
-                report($exception);
-            }
-        }
+        User::query()
+            ->orderBy('id')
+            ->chunkById(100, function (Collection $users) use ($notification): void {
+                foreach ($users as $user) {
+                    $user->notify($notification);
+                }
+            });
     }
 }

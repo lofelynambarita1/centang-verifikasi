@@ -25,9 +25,16 @@ class UserController extends Controller
         return view('users.create');
     }
 
-    public function store(StoreUserRequest $request): RedirectResponse
+    public function store(StoreUserRequest $request, NotificationDispatcher $notifications): RedirectResponse
     {
-        User::create($request->safe()->except('password_confirmation'));
+        $user = User::create($request->safe()->except('password_confirmation'));
+        $notifications->broadcast(new AuditSystemNotification(
+            'user_created',
+            'Pengguna baru ditambahkan',
+            "{$request->user()->name} menambahkan pengguna {$user->name}.",
+            route('notifications.index', [], false),
+            sendMail: false,
+        ));
 
         return redirect()->route('users.index')->with('success', 'Pengguna berhasil ditambahkan.');
     }
@@ -50,11 +57,20 @@ class UserController extends Controller
         $user->update($data);
 
         if ($hasRoleRequest) {
-            $notifications->send([$user], new AuditSystemNotification(
+            $notifications->broadcast(new AuditSystemNotification(
                 'role_approved',
                 'Permintaan role disetujui',
-                'Admin telah mengaktifkan akun Anda dengan role '.str_replace('_', ' ', ucfirst($user->role)).'.',
-                route('dashboard', [], false),
+                "Admin {$request->user()->name} menyetujui permintaan role {$user->name} menjadi ".str_replace('_', ' ', ucfirst($user->role)).'.',
+                route('notifications.index', [], false),
+                sendMail: false,
+            ));
+        } else {
+            $notifications->broadcast(new AuditSystemNotification(
+                'user_updated',
+                'Data pengguna diperbarui',
+                "{$request->user()->name} memperbarui data pengguna {$user->name}.",
+                route('notifications.index', [], false),
+                sendMail: false,
             ));
         }
 
@@ -68,21 +84,30 @@ class UserController extends Controller
         $requestedRole = $user->requested_role;
         $user->update(['role' => $requestedRole, 'requested_role' => null]);
 
-        $notifications->send([$user], new AuditSystemNotification(
+        $notifications->broadcast(new AuditSystemNotification(
             'role_approved',
             'Permintaan role disetujui',
-            'Admin telah mengaktifkan akun Anda dengan role '.str_replace('_', ' ', ucfirst($requestedRole)).'.',
-            route('dashboard', [], false),
+            'Admin '.auth()->user()->name." menyetujui permintaan role {$user->name} menjadi ".str_replace('_', ' ', ucfirst($requestedRole)).'.',
+            route('notifications.index', [], false),
+            sendMail: false,
         ));
 
         return redirect()->route('users.index')->with('success', 'Permintaan role berhasil disetujui.');
     }
 
-    public function destroy(User $user): RedirectResponse
+    public function destroy(User $user, NotificationDispatcher $notifications): RedirectResponse
     {
         abort_if($user->is(auth()->user()), 422, 'Akun yang sedang digunakan tidak dapat dihapus.');
 
+        $userName = $user->name;
         $user->delete();
+        $notifications->broadcast(new AuditSystemNotification(
+            'user_deleted',
+            'Pengguna dihapus',
+            auth()->user()->name." menghapus akun pengguna {$userName}.",
+            route('notifications.index', [], false),
+            sendMail: false,
+        ));
 
         return redirect()->route('users.index')->with('success', 'Pengguna dihapus.');
     }

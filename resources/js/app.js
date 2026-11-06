@@ -50,3 +50,27 @@ const evidencePreviewAndSubmit = () => {
 evidencePreviewAndSubmit();
 
 document.addEventListener('turbo:load', evidencePreviewAndSubmit);
+
+document.querySelectorAll('[data-app-toast]').forEach((toast) => {
+    const key = toast.dataset.toastKey;
+    const storageKey = key ? `centang-verifikasi:${key}` : null;
+
+    if (storageKey && sessionStorage.getItem(storageKey)) {
+        toast.remove();
+        return;
+    }
+
+    if (storageKey) {
+        sessionStorage.setItem(storageKey, 'shown');
+    }
+
+    let dismissTimeout;
+    const dismiss = () => {
+        window.clearTimeout(dismissTimeout);
+        toast.classList.add('app-toast--dismissed');
+        window.setTimeout(() => toast.remove(), 220);
+    };
+
+    toast.querySelector('[data-toast-dismiss]')?.addEventListener('click', dismiss);
+    dismissTimeout = window.setTimeout(dismiss, Number(toast.dataset.toastDuration) || 10000);
+});

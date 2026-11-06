@@ -123,25 +123,27 @@
         </div>
     </section>
 
-    <section class="audit-summary" aria-label="Progres verifikasi keseluruhan">
+    <section class="audit-summary" aria-label="{{ $canViewAllProgress ? 'Progres verifikasi keseluruhan' : 'Progres prinsip yang ditugaskan' }}">
         <div class="summary-head">
-            <strong>Progres verifikasi keseluruhan</strong>
+            <strong>{{ $canViewAllProgress ? 'Progres verifikasi keseluruhan' : 'Progres prinsip yang ditugaskan' }}</strong>
             <div class="summary-metric">
-                <span>{{ $verifiedItems }} / {{ $totalItems }} indikator terisi</span>
-                <strong>{{ $progress }}%</strong>
+                <span>{{ $progressSummary['verified'] }} / {{ $progressSummary['total'] }} indikator terisi</span>
+                <strong>{{ $progressSummary['percentage'] }}%</strong>
             </div>
         </div>
         <div class="progress progress--lg">
             <div class="progress__track">
-                <div class="progress__bar" style="width: {{ $progress }}%"></div>
+                <div class="progress__bar" style="width: {{ $progressSummary['percentage'] }}%"></div>
             </div>
         </div>
         <div class="summary-foot">
-            <span>Memenuhi: {{ $compliant }}</span>
+            <span>Memenuhi: {{ $progressSummary['compliant'] }}</span>
             <span> · </span>
-            <span>Tidak memenuhi: {{ $nonCompliant }}</span>
+            <span>Tidak memenuhi: {{ $progressSummary['non_compliant'] }}</span>
             <span> · </span>
-            <span>NA: {{ $na }}</span>
+            <span>NA: {{ $progressSummary['not_applicable'] }}</span>
+            <span> · </span>
+            <span>Menunggu penilaian: {{ $progressSummary['pending'] }}</span>
         </div>
     </section>
 
@@ -171,6 +173,37 @@
             </div>
         </section>
     @endcan
+
+    @if ($isIspoChecklist && $principleProgress !== [])
+        <section class="audit-principle-progress" aria-label="Progres verifikasi per prinsip">
+            <div class="audit-principle-progress__heading">
+                <h2>{{ $canViewAllProgress ? 'Progres semua prinsip' : 'Progres prinsip yang ditugaskan' }}</h2>
+                <p>{{ $canViewAllProgress ? 'Persentase penilaian untuk seluruh prinsip audit.' : 'Persentase hanya untuk prinsip yang menjadi tanggung jawab Anda.' }}</p>
+            </div>
+            <div class="audit-principle-progress__grid">
+                @foreach ($principleProgress as $principle)
+                    <article class="audit-principle-progress__item" data-principle="{{ $principle['principle'] }}">
+                        <div class="audit-principle-progress__label">
+                            <strong>Prinsip {{ $principle['principle'] }}</strong>
+                            <span>{{ $principle['percentage'] }}%</span>
+                        </div>
+                        <div
+                            class="audit-principle-progress__track"
+                            role="progressbar"
+                            aria-label="Progres Prinsip {{ $principle['principle'] }}"
+                            aria-valuenow="{{ $principle['percentage'] }}"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            aria-valuetext="{{ $principle['verified'] }} dari {{ $principle['total'] }} indikator selesai"
+                        >
+                            <span style="width: {{ $principle['percentage'] }}%"></span>
+                        </div>
+                        <span class="audit-principle-progress__count">{{ $principle['verified'] }} / {{ $principle['total'] }} indikator selesai</span>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endif
 
     <div class="tabs" role="navigation" aria-label="Pilih prinsip">
         @if ($isIspoChecklist)
@@ -218,6 +251,7 @@
                 $statusClass = $item->status === 'compliant' ? 'chip--done' : ($item->status === 'non_compliant' ? 'chip--red' : ($item->status === 'not_applicable' ? 'chip--todo' : 'chip--todo'));
                 $canEditItem = $canEditAllItems || $editablePrinciples->contains($item->principleNumber());
                 $assignedAuditorNames = $assigneesByPrinciple->get($item->principleNumber());
+                $canUpdateChecklist = auth()->user()?->canUpdateChecklist($item) ?? false;
             @endphp
 
             @if ($criteriaInfo && $criteriaCode !== $previousCriteria)
@@ -338,7 +372,7 @@
                     </div>
                 </div>
 
-                @if ($canEditItem)
+                @if ($canEditItem && $canUpdateChecklist)
                     <form method="POST" action="{{ route('audit-items.update', $item) }}" class="item-status-form">
                         @csrf
                         @method('PUT')
@@ -357,8 +391,16 @@
                             <button class="save-btn" type="submit">Simpan</button>
                         </div>
                     </form>
-                @elseif ($item->note)
-                    <p class="item-note"><strong>Catatan temuan:</strong> {{ $item->note }}</p>
+                @else
+                    <div class="item-status-form">
+                        <div class="status-form status-form--readonly">
+                            <label>Status indikator:</label>
+                            <span class="chip {{ $statusClass }}">{{ $statusLabel }}</span>
+                        </div>
+                        @if ($item->note)
+                            <p class="item-note"><strong>Catatan temuan:</strong> {{ $item->note }}</p>
+                        @endif
+                    </div>
                 @endif
             </article>
         @empty

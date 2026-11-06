@@ -127,6 +127,11 @@ class User extends Authenticatable
             ->exists();
     }
 
+    public function canUpdateChecklist(AuditItem $auditItem): bool
+    {
+        return $this->isAdmin() || $this->canWorkOn($auditItem);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

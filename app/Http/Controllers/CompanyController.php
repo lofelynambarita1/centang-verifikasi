@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCompanyRequest;
 use App\Models\Company;
+use App\Notifications\AuditSystemNotification;
+use App\Support\NotificationDispatcher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -36,11 +38,18 @@ class CompanyController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreCompanyRequest $request): RedirectResponse
+    public function store(StoreCompanyRequest $request, NotificationDispatcher $notifications): RedirectResponse
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
 
-        Company::create($request->validated());
+        $company = Company::create($request->validated());
+        $notifications->broadcast(new AuditSystemNotification(
+            'company_created',
+            'Perusahaan baru ditambahkan',
+            "{$request->user()->name} menambahkan perusahaan {$company->name}.",
+            route('companies.show', $company, false),
+            sendMail: false,
+        ));
 
         return redirect()->route('companies.index')->with('success', 'Data perusahaan berhasil disimpan.');
     }
@@ -69,10 +78,17 @@ class CompanyController extends Controller
     public function update(
         StoreCompanyRequest $request,
         Company $company,
+        NotificationDispatcher $notifications,
     ): RedirectResponse {
         abort_unless(auth()->user()?->isAdmin(), 403);
-
         $company->update($request->validated());
+        $notifications->broadcast(new AuditSystemNotification(
+            'company_updated',
+            'Data perusahaan diperbarui',
+            "{$request->user()->name} memperbarui data {$company->name}.",
+            route('companies.show', $company, false),
+            sendMail: false,
+        ));
 
         return redirect()->route('companies.index')->with('success', 'Data perusahaan berhasil diperbarui.');
     }
@@ -80,11 +96,18 @@ class CompanyController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Company $company): RedirectResponse
+    public function destroy(Company $company, NotificationDispatcher $notifications): RedirectResponse
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
-
+        $companyName = $company->name;
         $company->delete();
+        $notifications->broadcast(new AuditSystemNotification(
+            'company_deleted',
+            'Data perusahaan dihapus',
+            auth()->user()->name." menghapus data perusahaan {$companyName}.",
+            route('companies.index', [], false),
+            sendMail: false,
+        ));
 
         return redirect()->route('companies.index')->with('success', 'Perusahaan dihapus.');
     }
