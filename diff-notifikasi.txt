@@ -1,0 +1,102 @@
+diff --git a/app/Models/User.php b/app/Models/User.php
+index 27ab69a..5d7709f 100644
+--- a/app/Models/User.php
++++ b/app/Models/User.php
+@@ -100,7 +100,7 @@ class User extends Authenticatable
+         }
+ 
+         if ($audit !== null) {
+-            return $audit->userIsLead($this) || $this->roleName() === 'lead_audit';
++            return $audit->userIsLead($this);
+         }
+ 
+         return $this->isLeadAuditor();
+@@ -109,20 +109,21 @@ class User extends Authenticatable
+     public function canWorkOn(AuditItem $auditItem): bool
+     {
+         if ($this->isAdmin()) {
+-            return false;
++            return true;
+         }
+ 
+         $audit = $auditItem->audit;
+ 
+-        // Lead auditor pada audit terkait berhak mengisi checklist verifikasi
+-        if ($this->isLeadAuditor($audit)) {
++        if ($audit === null) {
++            return false;
++        }
++
++        if ($audit->userIsLead($this)) {
+             return true;
+         }
+ 
+-        // Auditor anggota proyek berhak jika ditugaskan pada prinsip audit tersebut
+-        return $this->audits()
+-            ->where('audits.id', $auditItem->audit_id)
+-            ->wherePivot('principle_number', $auditItem->principleNumber())
++        return $audit->assigneesForPrinciple($auditItem->principleNumber())
++            ->whereKey($this->getKey())
+             ->exists();
+     }
+ 
+diff --git a/app/Providers/AppServiceProvider.php b/app/Providers/AppServiceProvider.php
+index dbb4232..d4b9fd1 100644
+--- a/app/Providers/AppServiceProvider.php
++++ b/app/Providers/AppServiceProvider.php
+@@ -3,7 +3,9 @@
+ namespace App\Providers;
+ 
+ use App\Models\Audit;
++use App\Models\User;
+ use Illuminate\Contracts\View\View as ViewContract;
++use Illuminate\Support\Facades\Gate;
+ use Illuminate\Support\Facades\View;
+ use Illuminate\Support\ServiceProvider;
+ 
+@@ -22,6 +24,9 @@ class AppServiceProvider extends ServiceProvider
+      */
+     public function boot(): void
+     {
++        Gate::define('update-audit-summary', fn (User $user, Audit $audit): bool => $user->isAdmin()
++            || $audit->userIsLead($user));
++
+         View::composer('layouts.app', function (ViewContract $view): void {
+             $user = auth()->user();
+             $today = today();
+diff --git a/tests/Feature/AuditNotificationsTest.php b/tests/Feature/AuditNotificationsTest.php
+index 16f558c..89d4727 100644
+--- a/tests/Feature/AuditNotificationsTest.php
++++ b/tests/Feature/AuditNotificationsTest.php
+@@ -2,6 +2,8 @@
+ 
+ namespace Tests\Feature;
+ 
++use App\Enums\ProjectRole;
++use App\Models\AuditProjectMember;
+ use App\Models\Company;
+ use App\Models\User;
+ use App\Notifications\AuditSystemNotification;
+@@ -33,8 +35,10 @@ class AuditNotificationsTest extends TestCase
+             ->assertSee('Hasil audit baru')
+             ->assertSee('app-notification__badge', false)
+             ->assertSee('data-notification-menu', false)
++            ->assertSee('href="'.route('notifications.index').'"', false)
+             ->assertSee('Hasil baru tersedia untuk audit PT Contoh.')
+             ->assertSee('Lihat semua aktivitas')
++            ->assertDontSee('app-nav__badge', false)
+             ->assertDontSee('<span>Notifikasi</span>', false);
+ 
+         $this->actingAs($otherUser)
+@@ -72,6 +76,11 @@ class AuditNotificationsTest extends TestCase
+         $admin = User::factory()->create(['role' => 'admin']);
+         $company = Company::factory()->create(['name' => 'PT Contoh']);
+         $audit = $company->audits()->create(['title' => 'Audit penugasan']);
++        AuditProjectMember::create([
++            'audit_id' => $audit->id,
++            'user_id' => $lead->id,
++            'project_role' => ProjectRole::LeadAudit->value,
++        ]);
+         Notification::fake();
+ 
+         $this->actingAs($lead)->put(route('audits.assignments.update', $audit), [

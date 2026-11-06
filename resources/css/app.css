@@ -805,6 +805,17 @@ img, svg { vertical-align: middle; }
 .company-address { display: block; margin-top: 2px; color: #4b5563; font-size: .85em; line-height: 1.55; max-width: 340px; white-space: normal; }
 .cell-meta { margin-top: 5px; font-size: 13px; color: var(--quiet); }
 .cell-meta strong { color: var(--text); font-weight: 700; }
+.user-table { min-width: 760px; }
+.user-table th:last-child,
+.user-table td:last-child { white-space: nowrap; }
+.user-table .cell-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.user-table .cell-actions form { display: flex; margin: 0; }
+.user-table .cell-actions .btn { min-height: 36px; padding-right: 12px; padding-left: 12px; }
 .assignment-member-card { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
 .assignment-member-card__deadline input { width: 100%; min-width: 0; }
 .audit-member-timeline { display: grid; gap: 8px; margin-top: 10px; }
@@ -2156,16 +2167,43 @@ img, svg { vertical-align: middle; }
 }
 .dashboard-overall__chart-center strong { font-size: 30px; font-weight: 800; letter-spacing: -.05em; line-height: 1.1; }
 .dashboard-overall__chart-center span { color: var(--muted); font-size: 11px; font-weight: 700; }
-.dashboard-overall__details { min-width: 0; }
-.dashboard-overall__legend { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.dashboard-overall__legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
-.dashboard-overall__legend strong { color: var(--text); font-size: 14px; }
+.dashboard-overall__details { display: grid; min-width: 0; gap: 14px; }
+.dashboard-overall__legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.dashboard-overall__legend li {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 15px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: #fbfcfe;
+    color: var(--muted);
+    font-size: 13px;
+}
+.dashboard-overall__legend strong { color: var(--text); font-size: 16px; font-weight: 800; }
 .dashboard-overall__swatch { width: 10px; height: 10px; border-radius: 50%; }
 .dashboard-overall__swatch--met { background: var(--success); }
 .dashboard-overall__swatch--not-met { background: var(--danger); }
 .dashboard-overall__swatch--not-applicable { background: #5268b3; }
 .dashboard-overall__swatch--pending { background: #cbd2e0; }
-.dashboard-overall__summary { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+.dashboard-overall__summary {
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #f7f8fc;
+    color: var(--muted);
+    font-size: 13px;
+}
 .dashboard-projects { width: 100%; min-width: 0; }
 .dashboard-projects__table { width: 100%; min-width: 0; table-layout: fixed; }
 .dashboard-projects__table th,
@@ -2227,13 +2265,13 @@ img, svg { vertical-align: middle; }
     .audit-principle-progress__grid { grid-template-columns: 1fr; }
     .dashboard-overall__body { grid-template-columns: 1fr; gap: 18px; padding: 4px 0 0; }
     .dashboard-overall__chart { width: 170px; }
-    .dashboard-overall__legend { gap: 8px; }
+    .dashboard-overall__legend { grid-template-columns: 1fr; gap: 8px; }
     .app-nav__link span { display: none; }
     .app-nav__link { padding: 11px; }
     .app-topbar { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 18px; }
-    .app-topbar__controls { width: 100%; justify-content: space-between; gap: 10px; }
-    .app-topbar__controls > .app-topbar__actions { flex: 1 1 auto; justify-content: flex-start; }
-    .app-topbar__actions .btn { flex: 1 1 auto; }
+    .app-topbar__controls { width: 100%; flex-wrap: nowrap; justify-content: space-between; gap: 10px; }
+    .app-topbar__controls > .app-topbar__actions { min-width: 0; flex: 1 1 0; justify-content: flex-start; }
+    .app-topbar__actions .btn { min-width: 0; flex: 1 1 auto; padding-right: 10px; padding-left: 10px; font-size: 13px; }
     .app-topbar__tools { width: 100%; justify-content: space-between; }
     .app-topbar__tools > .app-topbar__actions { width: auto; flex: 1; justify-content: flex-end; }
     .app-notification-dropdown { right: 0; width: min(390px, calc(100vw - 56px)); }

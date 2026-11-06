@@ -1,0 +1,341 @@
+diff --git a/app/Http/Controllers/AuditController.php b/app/Http/Controllers/AuditController.php
+index 8db7601..6463a36 100644
+--- a/app/Http/Controllers/AuditController.php
++++ b/app/Http/Controllers/AuditController.php
+@@ -21,6 +21,7 @@ use Illuminate\Contracts\View\View;
+ use Illuminate\Http\RedirectResponse;
+ use Illuminate\Http\Request;
+ use Illuminate\Support\Facades\DB;
++use Illuminate\Support\Facades\Gate;
+ use Illuminate\Support\Facades\Storage;
+ use Illuminate\Support\Str;
+ use PhpOffice\PhpWord\IOFactory;
+@@ -54,9 +55,9 @@ class AuditController extends Controller
+                 ? $validated['title']
+                 : "Audit Verifikasi ISPO {$company->name}";
+ 
+-            $scope = ! empty($validated['scope'])
+-                ? $validated['scope']
+-                : 'Standar ISPO';
++            $scope = $validated['scope_category'] === 'hulu'
++                ? $validated['scope_detail']
++                : $validated['scope_category'];
+ 
+             $audit = Audit::create([
+                 'company_id' => $company->id,
+@@ -158,17 +159,34 @@ class AuditController extends Controller
+ 
+     public function show(Audit $audit): View
+     {
+-        $audit->load(['company', 'findings', 'assignees', 'leadMember.user']);
+-        $viewer = auth()->user();
+-        $canViewAllProgress = $viewer !== null
+-            && ($viewer->isAdmin() || $viewer->isLeadAuditor($audit));
+-        $canDownloadReport = auth()->user() !== null && $audit->userCanAccessReport(auth()->user());
++        $audit->load(['company', 'findings', 'assignees', 'leadMember.user', 'members.user']);
++        $teamAuditorNames = $audit->members
++            ->reject(fn (AuditProjectMember $member): bool => $member->isLead())
++            ->map(fn (AuditProjectMember $member): ?string => $member->user?->name)
++            ->filter()
++            ->values();
++        $user = auth()->user();
++        $canEditAllItems = $user !== null && ($user->isAdmin() || $audit->userIsLead($user));
++        $editablePrinciples = $canEditAllItems || $user === null
++            ? collect()
++            : $audit->assignees()
++                ->whereKey($user->getKey())
++                ->pluck('principle_number')
++                ->map(fn ($number): int => (int) $number)
++                ->unique()
++                ->values();
++        $assigneesByPrinciple = $audit->assignees
++            ->groupBy(fn (User $assignee): int => (int) $assignee->pivot->principle_number)
++            ->map(fn ($assignees) => $assignees->pluck('name')->join(', '));
++        $canViewAllProgress = $user !== null
++            && ($user->isAdmin() || $user->isLeadAuditor($audit));
++        $canDownloadReport = $user !== null && $audit->userCanAccessReport($user);
+         $allItems = $audit->items()->with('hasils')->get();
+         $isIspoChecklist = $allItems->contains(fn (AuditItem $item): bool => preg_match('/^[1-7]\.\d+\.\d+/', $item->title) === 1);
+-        $assignedPrinciples = $viewer === null
++        $assignedPrinciples = $user === null
+             ? []
+             : $audit->assignees
+-                ->filter(fn (User $assignee): bool => $assignee->is($viewer))
++                ->filter(fn (User $assignee): bool => $assignee->is($user))
+                 ->map(fn (User $assignee): int => (int) $assignee->pivot->principle_number)
+                 ->filter(fn (int $number): bool => $number > 0)
+                 ->unique()
+@@ -204,12 +222,31 @@ class AuditController extends Controller
+             'isIspoChecklist' => $isIspoChecklist,
+             'currentPage' => $currentPage,
+             'canDownloadReport' => $canDownloadReport,
++            'teamAuditorNames' => $teamAuditorNames,
++            'canEditAllItems' => $canEditAllItems,
++            'editablePrinciples' => $editablePrinciples,
++            'assigneesByPrinciple' => $assigneesByPrinciple,
+             'canViewAllProgress' => $canViewAllProgress,
+             'progressSummary' => $progressSummary,
+             'principleProgress' => AuditProgressSummary::byPrinciple($allItems, $visiblePrinciples),
+         ]);
+     }
+ 
++    public function updateSummary(Request $request, Audit $audit): RedirectResponse
++    {
++        Gate::authorize('update-audit-summary', $audit);
++
++        $validated = $request->validate([
++            'summary_notes' => ['nullable', 'string', 'max:10000'],
++        ]);
++
++        $audit->update(['summary_notes' => $validated['summary_notes'] ?? null]);
++        $this->recordAuditActivity($audit, $request->user());
++
++        return redirect()->route('audits.show', $audit)
++            ->with('success', 'Ringkasan penilaian berhasil disimpan.');
++    }
++
+     public function assignPrinciples(
+         AssignAuditPrinciplesRequest $request,
+         Audit $audit,
+@@ -261,10 +298,12 @@ class AuditController extends Controller
+ 
+             AuditProjectMember::updateOrCreate(
+                 ['audit_id' => $audit->id, 'user_id' => $leadAuditorId],
+-                [
+-                    'project_role' => ProjectRole::LeadAudit->value,
+-                    'added_by' => auth()->id(),
+-                ]
++                $this->projectMemberAttributes(
++                    $request,
++                    $validated,
++                    $leadAuditorId,
++                    ProjectRole::LeadAudit,
++                )
+             );
+         } else {
+             AuditProjectMember::where('audit_id', $audit->id)
+@@ -275,10 +314,12 @@ class AuditController extends Controller
+         foreach ($teamMemberIds as $memberId) {
+             AuditProjectMember::updateOrCreate(
+                 ['audit_id' => $audit->id, 'user_id' => $memberId],
+-                [
+-                    'project_role' => ProjectRole::Auditor->value,
+-                    'added_by' => auth()->id(),
+-                ]
++                $this->projectMemberAttributes(
++                    $request,
++                    $validated,
++                    $memberId,
++                    ProjectRole::Auditor,
++                )
+             );
+         }
+ 
+@@ -353,6 +394,7 @@ class AuditController extends Controller
+         $auditItem->update($validated);
+         $audit = $auditItem->audit()->with('company')->firstOrFail();
+         $audit->update(['status' => 'in_progress']);
++        $this->recordAuditActivity($audit, $request->user());
+ 
+         if ($auditItem->wasChanged(['status', 'note'])) {
+             $isNewFinding = $validated['status'] === 'non_compliant' && $previousStatus !== 'non_compliant';
+@@ -394,6 +436,7 @@ class AuditController extends Controller
+         $request->validate(['evidence' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240']]);
+         $auditItem->update(['evidence_path' => $request->file('evidence')->store('audit-evidence', 'public')]);
+         $audit = $auditItem->audit()->with('company')->firstOrFail();
++        $this->recordAuditActivity($audit, $request->user());
+         $notifications->broadcast(new AuditSystemNotification(
+             'audit_evidence_uploaded',
+             'Bukti audit diunggah',
+@@ -423,13 +466,16 @@ class AuditController extends Controller
+             'sort_order' => ((int) $auditItem->hasils()->max('sort_order')) + 1,
+         ]);
+         $audit->update(['status' => 'in_progress']);
+-        $notifications->broadcast(new AuditSystemNotification(
++        $this->recordAuditActivity($audit, $request->user());
++        $this->notifyAuditManagers(
++            $notifications,
++            (int) $request->user()->getAuthIdentifier(),
++            $audit,
++            $auditItem,
+             'audit_result',
+             'Hasil audit baru',
+             "{$request->user()->name} menambahkan hasil untuk indikator {$auditItem->title} di {$audit->company->name}.",
+-            route('companies.show', $audit->company, false),
+-            sendMail: false,
+-        ));
++        );
+ 
+         return back()->with('success', 'Hasil audit ditambahkan dan tersimpan sebagai draft.');
+     }
+@@ -443,7 +489,8 @@ class AuditController extends Controller
+ 
+         $validated = $this->validateHasil($request);
+         $auditItem = $auditHasil->auditItem;
+-        $audit = $auditItem->audit()->with('company')->firstOrFail();
++        $audit = $auditHasil->auditItem->audit;
++        $audit->loadMissing('company');
+ 
+         $auditHasil->update(['content' => $validated['content'] ?? null]);
+ 
+@@ -456,6 +503,7 @@ class AuditController extends Controller
+         }
+ 
+         $audit->update(['status' => 'in_progress']);
++        $this->recordAuditActivity($audit, $request->user());
+         $notifications->broadcast(new AuditSystemNotification(
+             'audit_result_updated',
+             'Hasil audit diperbarui',
+@@ -483,6 +531,7 @@ class AuditController extends Controller
+ 
+         $auditHasil->delete();
+         $audit->update(['status' => 'in_progress']);
++        $this->recordAuditActivity($audit, request()->user());
+         $audit->loadMissing('company');
+         $notifications->broadcast(new AuditSystemNotification(
+             'audit_result_deleted',
+@@ -506,6 +555,81 @@ class AuditController extends Controller
+         ]);
+     }
+ 
++    /**
++     * @param  array<string, mixed>  $validated
++     * @return array<string, mixed>
++     */
++    private function projectMemberAttributes(
++        AssignAuditPrinciplesRequest $request,
++        array $validated,
++        int $memberId,
++        ProjectRole $projectRole,
++    ): array {
++        $attributes = [
++            'project_role' => $projectRole->value,
++            'added_by' => $request->user()->id,
++        ];
++
++        if (
++            $request->user()->isAdmin()
++            && array_key_exists($memberId, $validated['member_deadlines'] ?? [])
++        ) {
++            $attributes['deadline_at'] = $validated['member_deadlines'][$memberId];
++        }
++
++        return $attributes;
++    }
++
++    private function recordAuditActivity(Audit $audit, User $actor): void
++    {
++        $member = AuditProjectMember::query()
++            ->where('audit_id', $audit->id)
++            ->where('user_id', $actor->id)
++            ->first();
++
++        if ($member === null) {
++            return;
++        }
++
++        $submittedAt = now();
++        $member->update([
++            'first_submitted_at' => $member->first_submitted_at ?? $submittedAt,
++            'last_submitted_at' => $submittedAt,
++        ]);
++    }
++
++    private function notifyAuditManagers(
++        NotificationDispatcher $notifications,
++        int $actorId,
++        Audit $audit,
++        AuditItem $auditItem,
++        string $event,
++        string $title,
++        string $message,
++    ): void {
++        $leadUser = $audit->leadMember?->user;
++        $recipients = User::query()
++            ->whereNull('requested_role')
++            ->whereIn('role', ['admin', 'lead_audit'])
++            ->where('id', '!=', $actorId)
++            ->get();
++
++        if ($leadUser && $leadUser->id !== $actorId && $leadUser->requested_role === null) {
++            $recipients->push($leadUser);
++            $recipients = $recipients->unique('id');
++        }
++
++        $notifications->send($recipients, new AuditSystemNotification(
++            $event,
++            $title,
++            $message,
++            route('audits.show', [
++                'audit' => $audit,
++                'page' => max(1, $auditItem->principleNumber()),
++            ], false),
++        ));
++    }
++
+     public function complete(Audit $audit, NotificationDispatcher $notifications): RedirectResponse
+     {
+         abort_unless(auth()->user()?->isLeadAuditor($audit) || auth()->user()?->isAdmin(), 403, 'Hanya Lead Auditor atau Admin yang berhak menyelesaikan audit.');
+@@ -514,6 +638,7 @@ class AuditController extends Controller
+         abort_if($audit->items->contains('status', 'pending'), 422, 'Semua item checklist harus diisi terlebih dahulu.');
+ 
+         $audit->update(['status' => 'completed', 'completed_at' => now()]);
++        $this->recordAuditActivity($audit, auth()->user());
+ 
+         $notifications->broadcast(new AuditSystemNotification(
+             'audit_completed',
+@@ -530,15 +655,23 @@ class AuditController extends Controller
+     {
+         abort_unless(auth()->user() !== null && $audit->userCanAccessReport(auth()->user()), 403);
+ 
++        $audit->load([
++            'company',
++            'items.hasils',
++            'findings',
++            'assignees',
++            'leadMember.user',
++            'members.user',
++        ]);
++        $teamAuditorNames = $audit->members
++            ->reject(fn (AuditProjectMember $member): bool => $member->isLead())
++            ->map(fn (AuditProjectMember $member): ?string => $member->user?->name)
++            ->filter()
++            ->values();
++
+         return view('audits.report', [
+-            'audit' => $audit->load([
+-                'company',
+-                'items.hasils',
+-                'findings',
+-                'assignees',
+-                'leadMember.user',
+-                'members.user',
+-            ]),
++            'audit' => $audit,
++            'teamAuditorNames' => $teamAuditorNames,
+         ]);
+     }
+ 
+@@ -582,6 +715,11 @@ class AuditController extends Controller
+                 ->values(),
+         ]);
+         $leadAuditor = $audit->leadMember?->user;
++        $teamAuditorNames = $audit->members
++            ->reject(fn (AuditProjectMember $member): bool => $member->isLead())
++            ->map(fn (AuditProjectMember $member): ?string => $member->user?->name)
++            ->filter()
++            ->values();
+         $assignedAuditorNames = $audit->assignees
+             ->reject(fn (User $user): bool => $leadAuditor !== null && $user->is($leadAuditor))
+             ->pluck('name')
+@@ -597,8 +735,9 @@ class AuditController extends Controller
+             'principleSummaries' => $principleSummaries,
+             'principleAuditors' => $principleAuditors,
+             'leadAuditor' => $leadAuditor,
++            'teamAuditorNames' => $teamAuditorNames,
+             'assignedAuditorNames' => $assignedAuditorNames,
+-        ])->setPaper('a4', 'portrait');
++        ])->setPaper('letter', 'portrait');
+ 
+         $filename = 'laporan-verifikasi-ispo-'.Str::slug($audit->company->name).'.pdf';
+ 
