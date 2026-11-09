@@ -112,6 +112,20 @@ class RoleAndDefaultUserTest extends TestCase
         ]);
     }
 
+    public function test_edit_user_page_places_arrowless_back_link_beside_save_action(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $user = User::factory()->create(['role' => 'auditor']);
+
+        $this->actingAs($admin)
+            ->get(route('users.edit', $user))
+            ->assertOk()
+            ->assertSee('class="user-form-actions"', false)
+            ->assertSee('Simpan perubahan')
+            ->assertSee('>Kembali</a>', false)
+            ->assertDontSee('← Kembali');
+    }
+
     public function test_admin_assigns_lead_auditor_via_penugasan_auditor_menu(): void
     {
         $this->seed(RoleSeeder::class);

@@ -579,6 +579,7 @@ class AuditWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Preview PDF')
             ->assertSee('Unduh Laporan PDF')
+            ->assertDontSee('Download Word')
             ->assertSee('target="_blank" rel="noopener noreferrer"', false)
             ->assertSee($previewUrl, false)
             ->assertSee($downloadUrl, false);

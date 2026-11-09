@@ -31,7 +31,6 @@
                 </button>
                 <div class="menu-split__panel" id="audit-export-menu" role="menu" aria-label="Export laporan">
                     <a class="menu-split__item" href="{{ route('audits.report', $audit) }}" role="menuitem">Cetak laporan</a>
-                    <a class="menu-split__item" href="{{ route('audits.download', $audit) }}" role="menuitem">Download Word</a>
                     <a class="menu-split__item" href="{{ route('audits.pdf', $audit) }}" target="_blank" rel="noopener noreferrer" role="menuitem">Preview PDF</a>
                     <a class="menu-split__item menu-split__item--primary" href="{{ route('audits.pdf', ['audit' => $audit, 'download' => 1]) }}" role="menuitem">Unduh Laporan PDF</a>
                 </div>

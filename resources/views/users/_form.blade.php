@@ -8,3 +8,9 @@
     <div class="field"><label for="password">Password {{ $user ? '(kosongkan jika tidak diubah)' : '' }}</label><input id="password" type="password" name="password" {{ $user ? '' : 'required' }}></div>
     <div class="field"><label for="password_confirmation">Konfirmasi password</label><input id="password_confirmation" type="password" name="password_confirmation" {{ $user ? '' : 'required' }}></div>
 </div>
+@if ($showUserFormActions ?? false)
+    <div class="user-form-actions">
+        <button class="btn btn--primary" type="submit">Simpan perubahan</button>
+        <a class="btn btn--ghost" href="{{ route('users.index') }}">Kembali</a>
+    </div>
+@endif

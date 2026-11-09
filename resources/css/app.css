@@ -1305,6 +1305,7 @@ img, svg { vertical-align: middle; }
 }
 .field .hint { font-size: 12.5px; color: var(--quiet); }
 .form-submit { justify-self: start; }
+.user-form-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border); }
 .form-error { background: var(--danger-bg); color: var(--danger); border: 1px solid #f2c9c3; border-radius: 10px; padding: 13px 15px; font-size: 14px; font-weight: 600; }
 .check-control { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13.5px; font-weight: 600; }
 .check-control input { accent-color: var(--primary); width: 16px; height: 16px; }
@@ -2386,6 +2387,8 @@ img, svg { vertical-align: middle; }
     .form-grid { grid-template-columns: 1fr; }
     .field--wide { grid-column: auto; }
     .form-submit { width: 100%; }
+    .user-form-actions { gap: 10px; padding-top: 14px; }
+    .user-form-actions .btn { flex: 1 1 auto; }
     .form-card { padding: 20px 16px; }
     .dashboard-projects__table { min-width: 0; }
     .notification-item { grid-template-columns: 36px minmax(0, 1fr); gap: 10px 12px; align-items: start; padding: 14px; }
