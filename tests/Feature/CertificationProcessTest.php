@@ -19,23 +19,26 @@ class CertificationProcessTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $company = Company::factory()->create(['name' => 'PT Sawit Sejahtera']);
+        $otherCompany = Company::factory()->create(['name' => 'PT Perusahaan Kedua']);
 
         $this->actingAs($admin)
             ->get(route('certification-process.index', 'hulu'))
             ->assertOk()
             ->assertSee('Hulu')
             ->assertSee('PT Sawit Sejahtera')
+            ->assertSee('PT Perusahaan Kedua')
             ->assertSee(route('certification-process.show', ['hulu', $company]), false)
             ->assertSee('Hilir')
-            ->assertSee('Bio');
+            ->assertSee('Bioenergi')
+            ->assertDontSee('>Bio<', false);
     }
 
-    public function test_lead_auditor_only_sees_companies_with_an_assigned_lead_audit(): void
+    public function test_lead_auditor_can_access_all_company_processes(): void
     {
         $lead = User::factory()->create(['role' => 'auditor']);
-        $assignedCompany = Company::factory()->create(['name' => 'Perusahaan Ditugaskan']);
+        $leadCompany = Company::factory()->create(['name' => 'Perusahaan Tim Lead']);
         $otherCompany = Company::factory()->create(['name' => 'Perusahaan Lain']);
-        $audit = $assignedCompany->audits()->create(['title' => 'Audit Hulu']);
+        $audit = $leadCompany->audits()->create(['title' => 'Audit Hulu']);
         $audit->members()->create([
             'user_id' => $lead->id,
             'project_role' => ProjectRole::LeadAudit->value,
@@ -44,28 +47,94 @@ class CertificationProcessTest extends TestCase
         $this->actingAs($lead)
             ->get(route('certification-process.index', 'hulu'))
             ->assertOk()
-            ->assertSee('Perusahaan Ditugaskan')
-            ->assertDontSee('Perusahaan Lain');
+            ->assertSee('Perusahaan Tim Lead')
+            ->assertSee('Perusahaan Lain');
+
+        $this->get(route('certification-process.show', ['hulu', $otherCompany]))
+            ->assertOk()
+            ->assertSee('Simpan proses sertifikasi');
+
+        $this->put(route('certification-process.update', ['hulu', $otherCompany]), [
+            'audit_report' => 'Lead Auditor dapat mengelola semua perusahaan.',
+        ])->assertRedirect(route('certification-process.show', ['hulu', $otherCompany]));
+
+        $this->assertDatabaseHas('certification_processes', [
+            'company_id' => $otherCompany->id,
+            'category' => 'hulu',
+            'audit_report' => 'Lead Auditor dapat mengelola semua perusahaan.',
+        ]);
     }
 
-    public function test_lead_auditor_cannot_open_an_unassigned_company_process(): void
+    public function test_auditor_sees_only_assigned_companies_and_principle_progress(): void
     {
-        $lead = User::factory()->create(['role' => 'auditor']);
+        $auditor = User::factory()->create(['role' => 'auditor']);
+        $assignedCompany = Company::factory()->create(['name' => 'Perusahaan Ditugaskan']);
+        $otherCompany = Company::factory()->create(['name' => 'Perusahaan Lain']);
+        $audit = $assignedCompany->audits()->create(['title' => 'Audit Hulu Rahasia']);
+        $audit->items()->create(['title' => '1.1.1 Persyaratan', 'status' => 'compliant']);
+        $audit->items()->create(['title' => '1.1.2 Implementasi', 'status' => 'pending']);
+        $audit->items()->create([
+            'title' => '2.1.1 Prinsip tidak ditugaskan',
+            'status' => 'non_compliant',
+            'note' => 'Catatan yang tidak boleh ditampilkan',
+        ]);
+        $audit->assignees()->attach($auditor->id, ['principle_number' => 1]);
+        $assignedCompany->certificationProcesses()->create([
+            'category' => 'hulu',
+            'audit_report' => 'Isi laporan yang hanya untuk pengelola',
+            'review_panel' => 'Isi review yang hanya untuk pengelola',
+            'summary_document_path' => 'private/laporan.pdf',
+            'certificate_document_path' => 'private/sertifikat.pdf',
+        ]);
+
+        $this->actingAs($auditor)
+            ->get(route('certification-process.index', 'hulu'))
+            ->assertOk()
+            ->assertSee('Perusahaan Ditugaskan')
+            ->assertDontSee('Perusahaan Lain')
+            ->assertSee('Lihat progres')
+            ->assertDontSee('bagian terisi');
+
+        $this->get(route('certification-process.show', ['hulu', $assignedCompany]))
+            ->assertOk()
+            ->assertSee('Prinsip 1')
+            ->assertSee('Audit Hulu Rahasia')
+            ->assertSee('50%')
+            ->assertSee('Memenuhi')
+            ->assertSee('Belum dinilai')
+            ->assertDontSee('Prinsip 2')
+            ->assertDontSee('Catatan yang tidak boleh ditampilkan')
+            ->assertDontSee('Isi laporan yang hanya untuk pengelola')
+            ->assertDontSee('Isi review yang hanya untuk pengelola')
+            ->assertDontSee('Lihat / unduh')
+            ->assertDontSee('Simpan proses sertifikasi');
+    }
+
+    public function test_auditor_cannot_access_unassigned_company_or_manage_documents(): void
+    {
+        Storage::fake('local');
+        $auditor = User::factory()->create(['role' => 'auditor']);
         $assignedCompany = Company::factory()->create();
         $otherCompany = Company::factory()->create();
         $audit = $assignedCompany->audits()->create(['title' => 'Audit Hulu']);
-        $audit->members()->create([
-            'user_id' => $lead->id,
-            'project_role' => ProjectRole::LeadAudit->value,
+        $audit->items()->create(['title' => '1.1.1 Persyaratan']);
+        $audit->assignees()->attach($auditor->id, ['principle_number' => 1]);
+        Storage::disk('local')->put('private/laporan.pdf', 'Isi laporan privat.');
+        $assignedCompany->certificationProcesses()->create([
+            'category' => 'hulu',
+            'summary_document_path' => 'private/laporan.pdf',
         ]);
 
-        $this->actingAs($lead)
+        $this->actingAs($auditor)
             ->get(route('certification-process.show', ['hulu', $otherCompany]))
             ->assertNotFound();
 
-        $this->put(route('certification-process.update', ['hulu', $otherCompany]), [
-            'audit_report' => 'Tidak berwenang',
+        $this->put(route('certification-process.update', ['hulu', $assignedCompany]), [
+            'audit_report' => 'Auditor tidak berwenang mengelola dokumen.',
         ])->assertForbidden();
+
+        $this->get(route('certification-process.documents.download', ['hulu', $assignedCompany, 'summary']))
+            ->assertNotFound();
     }
 
     public function test_admin_can_save_process_documents_and_get_a_public_certificate_qr(): void

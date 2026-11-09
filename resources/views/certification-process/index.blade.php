@@ -5,19 +5,27 @@
 @section('heading', $category->label())
 
 @section('content')
-    <p class="page-intro">Pilih perusahaan untuk mengelola dokumen dan tahapan sertifikasi {{ $category->label() }}.</p>
+    <p class="page-intro">
+        @if ($canManageProcess)
+            Pilih perusahaan untuk mengelola dokumen dan tahapan sertifikasi {{ $category->label() }}.
+        @else
+            Perusahaan yang ditampilkan adalah perusahaan dengan penugasan prinsip audit kepada Anda.
+        @endif
+    </p>
 
     <section class="certification-company-grid" aria-label="Perusahaan dalam proses sertifikasi {{ $category->label() }}">
         @forelse ($companies as $company)
             @php
-                $process = $company->certificationProcesses->first();
-                $completedStages = collect([
-                    filled($process?->summary_document_path),
-                    filled($process?->audit_correction_document_path),
-                    filled($process?->audit_report),
-                    filled($process?->review_panel),
-                    filled($process?->certificate_document_path),
-                ])->filter()->count();
+                if ($canManageProcess) {
+                    $process = $company->certificationProcesses->first();
+                    $completedStages = collect([
+                        filled($process?->summary_document_path),
+                        filled($process?->audit_correction_document_path),
+                        filled($process?->audit_report),
+                        filled($process?->review_panel),
+                        filled($process?->certificate_document_path),
+                    ])->filter()->count();
+                }
             @endphp
             <article class="certification-company-card">
                 <div class="certification-company-card__top">
@@ -31,14 +39,25 @@
                 <h2>{{ $company->name }}</h2>
                 <p>{{ $company->industry ?: 'Informasi bidang usaha belum tersedia' }}</p>
                 <div class="certification-company-card__footer">
-                    <span>{{ $completedStages }} dari 5 bagian terisi</span>
-                    <a class="btn btn--outline btn--sm" href="{{ route('certification-process.show', [$category->value, $company]) }}">Kelola proses</a>
+                    @if ($canManageProcess)
+                        <span>{{ $completedStages }} dari 5 bagian terisi</span>
+                        <a class="btn btn--outline btn--sm" href="{{ route('certification-process.show', [$category->value, $company]) }}">Kelola proses</a>
+                    @else
+                        <span>{{ $company->assigned_audits_count }} audit ditugaskan</span>
+                        <a class="btn btn--outline btn--sm" href="{{ route('certification-process.show', [$category->value, $company]) }}">Lihat progres</a>
+                    @endif
                 </div>
             </article>
         @empty
             <div class="certification-empty">
                 <strong>Belum ada perusahaan untuk ditampilkan</strong>
-                <p>Perusahaan akan muncul di sini setelah tersedia dan Anda ditugaskan sebagai Lead Auditor.</p>
+                <p>
+                    @if ($canManageProcess)
+                        Perusahaan akan muncul di sini setelah terdaftar di sistem.
+                    @else
+                        Perusahaan akan muncul di sini setelah Lead Auditor menugaskan prinsip audit kepada Anda.
+                    @endif
+                </p>
             </div>
         @endforelse
     </section>

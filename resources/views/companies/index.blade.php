@@ -50,7 +50,7 @@
                             ? 'Selesai'
                             : ($latestAudit?->status === 'in_progress' ? 'Sedang berlangsung' : 'Belum mulai');
                     @endphp
-                    <tr>
+                    <tr class="companies-table__row">
                         <td>
                             <div class="cell-company">
                                 <div class="avatar {{ $avatarColors[$loop->index % 5] }}">{{ $initials($company->name) }}</div>
@@ -60,8 +60,8 @@
                                 </div>
                             </div>
                         </td>
-                        <td class="company-client-year">{{ $company->client_year ?? '-' }}</td>
-                        <td>
+                        <td class="company-client-year" data-label="Klien sejak">{{ $company->client_year ?? '-' }}</td>
+                        <td data-label="Audit terkini">
                             @if ($latestAudit)
                                 <strong>{{ $auditLabel }}</strong>
                                 <div class="cell-meta">Status: {{ $auditStatus }}</div>
@@ -69,11 +69,11 @@
                                 <span class="cell-meta">Belum ada audit</span>
                             @endif
                         </td>
-                        <td>
+                        <td data-label="Kontak PIC">
                             <strong>{{ $company->contact_name ?: 'Belum diisi' }}</strong>
                             <div class="cell-meta">{{ $company->contact_email ?: 'Email belum diisi' }}</div>
                         </td>
-                        <td>
+                        <td data-label="Total riwayat audit">
                             <span class="companies-audit-count">{{ $company->audits_count }}</span>
                         </td>
                         <td>
@@ -106,7 +106,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr>
+                    <tr class="companies-table__empty-row">
                         <td colspan="6">
                             <div class="empty">
                                 <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

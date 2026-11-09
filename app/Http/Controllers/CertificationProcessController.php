@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Enums\CertificationCategory;
-use App\Enums\ProjectRole;
 use App\Http\Requests\UpdateCertificationProcessRequest;
 use App\Models\Audit;
 use App\Models\CertificationProcess;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\AuditProgressSummary;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\SvgWriter;
@@ -74,25 +74,24 @@ class CertificationProcessController extends Controller
                 ->get();
 
             $assignedPrincipleProgress = $assignedAudits
-                ->flatMap(fn (Audit $audit): array => $audit->assignees
-                    ->flatMap(function (User $assignee) use ($audit): array {
-                        $principleNumber = (int) $assignee->pivot->principle_number;
-                        $items = $audit->items
-                            ->filter(fn ($item): bool => $item->principleNumber() === $principleNumber)
-                            ->values();
-                        $total = $items->count();
-                        $completed = $items->whereIn('status', ['compliant', 'non_compliant', 'not_applicable'])->count();
+                ->flatMap(function (Audit $audit): array {
+                    return $audit->assignees
+                        ->map(function (User $assignee) use ($audit): array {
+                            $principleNumber = (int) $assignee->pivot->principle_number;
+                            $items = $audit->items
+                                ->filter(fn ($item): bool => $item->principleNumber() === $principleNumber)
+                                ->values();
+                            $summary = AuditProgressSummary::forItems($items);
 
-                        return [[
-                            'audit_title' => $audit->title,
-                            'principle_number' => $principleNumber,
-                            'items' => $total,
-                            'completed' => $completed,
-                            'pending' => $total - $completed,
-                            'percentage' => $total > 0 ? (int) round($completed / $total * 100) : 0,
-                        ]];
-                    }))
-                ->sortBy(['audit_title', 'principle_number'])
+                            return [
+                                'audit_title' => $audit->title,
+                                'principle_number' => $principleNumber,
+                                ...$summary,
+                            ];
+                        })
+                        ->all();
+                })
+                ->sortBy('principle_number')
                 ->values();
 
             return view('certification-process.show', [

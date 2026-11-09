@@ -13,7 +13,7 @@ enum CertificationCategory: string
         return match ($this) {
             self::Hulu => 'Hulu',
             self::Hilir => 'Hilir',
-            self::Bio => 'Bio',
+            self::Bio => 'Bioenergi',
         };
     }
 }

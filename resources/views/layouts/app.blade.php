@@ -48,6 +48,7 @@
                     <div class="app-nav-group__items">
                         @foreach (\App\Enums\CertificationCategory::cases() as $category)
                             <a class="app-nav__link app-nav-group__item @if (request()->route('category') === $category->value) active @endif" href="{{ route('certification-process.index', $category->value) }}">
+                                <span class="app-nav-group__marker" aria-hidden="true"></span>
                                 <span>{{ $category->label() }}</span>
                             </a>
                         @endforeach
