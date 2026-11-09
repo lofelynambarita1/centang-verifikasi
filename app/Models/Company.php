@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\ProjectRole;
 use Database\Factories\CompanyFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -37,11 +36,14 @@ class Company extends Model
     public function canManageCertificationProcess(User $user): bool
     {
         return $user->isAdmin()
-            || $user->roleName() === 'lead_audit'
-            || $this->audits()
-                ->whereHas('members', fn (Builder $query) => $query
-                    ->where('user_id', $user->id)
-                    ->whereIn('project_role', [ProjectRole::LeadAudit->value, ProjectRole::LeadAuditor->value]))
-                ->exists();
+            || $user->canManageAssignments();
+    }
+
+    public function canViewAssignedCertificationProgress(User $user): bool
+    {
+        return $this->canManageCertificationProcess($user)
+            || ($user->isAuditor() && $this->audits()
+                ->whereHas('assignees', fn (Builder $query) => $query->whereKey($user->getKey()))
+                ->exists());
     }
 }

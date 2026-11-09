@@ -33,7 +33,7 @@
                 </svg>
                 <span>Perusahaan</span>
             </a>
-            @if (auth()->user()?->canManageAssignments())
+            @if (auth()->user()?->canManageAssignments() || auth()->user()?->isAuditor())
                 <details class="app-nav-group" @if (request()->routeIs('certification-process.*')) open @endif>
                     <summary class="app-nav__link app-nav-group__trigger @if (request()->routeIs('certification-process.*')) active @endif" aria-label="Proses Sertifikasi">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

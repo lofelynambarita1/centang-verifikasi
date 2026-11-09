@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\CertificationCategory;
 use App\Enums\ProjectRole;
 use App\Http\Requests\UpdateCertificationProcessRequest;
+use App\Models\Audit;
 use App\Models\CertificationProcess;
 use App\Models\Company;
 use App\Models\User;
@@ -12,6 +13,7 @@ use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
@@ -28,30 +30,78 @@ class CertificationProcessController extends Controller
     {
         $category = $this->category($category);
         $user = request()->user();
+        $canManageProcess = $user instanceof User && $user->canManageAssignments();
 
-        abort_unless($user instanceof User && $user->canManageAssignments(), 403);
+        abort_unless($user instanceof User && ($canManageProcess || $user->isAuditor()), 403);
 
         $companies = Company::query()
-            ->with(['certificationProcesses' => fn (HasMany $query) => $query->where('category', $category->value)])
-            ->when(! $user->isAdmin() && $user->roleName() !== 'lead_audit', fn (Builder $query) => $query->whereHas(
-                'audits.members',
-                fn (Builder $members) => $members
-                    ->where('user_id', $user->id)
-                    ->whereIn('project_role', [ProjectRole::LeadAudit->value, ProjectRole::LeadAuditor->value])
-            ))
+            ->when(
+                $canManageProcess,
+                fn (Builder $query) => $query->with(['certificationProcesses' => fn (HasMany $processes) => $processes->where('category', $category->value)]),
+                fn (Builder $query) => $query
+                    ->whereHas('audits.assignees', fn (Builder $assignees) => $assignees->whereKey($user->getKey()))
+                    ->withCount([
+                        'audits as assigned_audits_count' => fn (Builder $audits) => $audits
+                            ->whereHas('assignees', fn (Builder $assignees) => $assignees->whereKey($user->getKey())),
+                    ])
+            )
             ->orderBy('name')
             ->get();
 
         return view('certification-process.index', [
             'category' => $category,
             'companies' => $companies,
+            'canManageProcess' => $canManageProcess,
         ]);
     }
 
     public function show(string $category, Company $company): View
     {
         $category = $this->category($category);
-        $this->authorizeCompany($company);
+        $user = request()->user();
+        abort_unless($user instanceof User && $company->canViewAssignedCertificationProgress($user), 404);
+
+        $canManageProcess = $company->canManageCertificationProcess($user);
+
+        if (! $canManageProcess) {
+            $assignedAudits = $company->audits()
+                ->whereHas('assignees', fn (Builder $assignees) => $assignees->whereKey($user->getKey()))
+                ->with([
+                    'items',
+                    'assignees' => fn (BelongsToMany $assignees) => $assignees->whereKey($user->getKey()),
+                ])
+                ->orderByDesc('created_at')
+                ->get();
+
+            $assignedPrincipleProgress = $assignedAudits
+                ->flatMap(fn (Audit $audit): array => $audit->assignees
+                    ->flatMap(function (User $assignee) use ($audit): array {
+                        $principleNumber = (int) $assignee->pivot->principle_number;
+                        $items = $audit->items
+                            ->filter(fn ($item): bool => $item->principleNumber() === $principleNumber)
+                            ->values();
+                        $total = $items->count();
+                        $completed = $items->whereIn('status', ['compliant', 'non_compliant', 'not_applicable'])->count();
+
+                        return [[
+                            'audit_title' => $audit->title,
+                            'principle_number' => $principleNumber,
+                            'items' => $total,
+                            'completed' => $completed,
+                            'pending' => $total - $completed,
+                            'percentage' => $total > 0 ? (int) round($completed / $total * 100) : 0,
+                        ]];
+                    }))
+                ->sortBy(['audit_title', 'principle_number'])
+                ->values();
+
+            return view('certification-process.show', [
+                'category' => $category,
+                'company' => $company,
+                'canManageProcess' => false,
+                'assignedPrincipleProgress' => $assignedPrincipleProgress,
+            ]);
+        }
 
         $process = $company->certificationProcesses()
             ->where('category', $category->value)
@@ -74,6 +124,7 @@ class CertificationProcessController extends Controller
         return view('certification-process.show', [
             'category' => $category,
             'company' => $company,
+            'canManageProcess' => true,
             'process' => $process,
             'qrCodeDataUri' => $qrCodeDataUri,
         ]);
