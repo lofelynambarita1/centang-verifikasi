@@ -200,6 +200,27 @@
         </div>
     @endforeach
 </div>
+
+@auth
+    <div class="profile-menu" data-profile-menu>
+        <button class="profile-pill" type="button" data-menu-trigger aria-expanded="false" aria-controls="profile-dropdown" aria-label="Profil pengguna">
+            <span class="profile-pill__avatar">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
+            <div class="profile-pill__meta">
+                <strong>{{ auth()->user()->name }}</strong>
+                <span>{{ str_replace('_', ' ', ucfirst(auth()->user()->role)) }}</span>
+            </div>
+        </button>
+
+        <div class="profile-dropdown" id="profile-dropdown" data-menu-panel hidden>
+            <a href="{{ route('dashboard') }}" class="profile-dropdown__item">Masuk</a>
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <button type="submit" class="profile-dropdown__item profile-dropdown__item--danger">Keluar</button>
+            </form>
+        </div>
+    </div>
+@endauth
+
 @stack('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
